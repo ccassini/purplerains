@@ -82,15 +82,14 @@
   background: #110e1f;
   border: 1.5px solid rgba(139, 92, 246, 0.22);
   contain: layout style paint;
-  will-change: width, height, box-shadow;
   backface-visibility: hidden;
   -webkit-font-smoothing: subpixel-antialiased;
-  transition:
-    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.28s ease,
-    border-color 0.2s ease,
-    border-width 0.2s ease;
+  /* No width/height/border-width transition: those are layout-bound, so every
+     frame of the tween forced a layout pass — and because the proposer changes
+     ~3x/second the page was almost never free of one. The pop is driven by
+     transform on the child instead (see .vm-on below). MapLibre writes its own
+     transform to this element inline, so the scale cannot live here. */
+  transition: box-shadow 0.28s ease, border-color 0.2s ease;
 }
 .vm:hover {
   border-color: rgba(167, 139, 250, 0.55);
@@ -105,6 +104,9 @@
   display: block;
   pointer-events: none;
   border-radius: 50%;
+  transform: scale(1);
+  transform-origin: 50% 50%;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
 }
 
 .vm-fb {
@@ -119,6 +121,9 @@
   background: linear-gradient(135deg, #2a1762, #15102a);
   pointer-events: none;
   border-radius: 50%;
+  transform: scale(1);
+  transform-origin: 50% 50%;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
 }
 
 /* Current block producer — pop forward, larger logo, soft glow (no heavy frame) */
