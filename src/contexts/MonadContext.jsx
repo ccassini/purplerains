@@ -25,8 +25,8 @@ import { BLOCK_TIME_MS } from '../utils/formatters'
 // =====================================================
 // RATE LIMITING & OPTIMIZATION CONSTANTS
 // =====================================================
-const ACTIVE_POLL_INTERVAL = 100 // When tab is active: fast polling
-const INACTIVE_POLL_INTERVAL = 5000 // When tab is hidden: slow polling (save resources)
+const ACTIVE_POLL_INTERVAL = 1500 // HTTP fallback only (WS is primary)
+const INACTIVE_POLL_INTERVAL = 8000 // When tab is hidden: slow polling (save resources)
 const CACHE_DURATION_MS = 30000 // Cache block data for 30 seconds
 const MAX_REQUESTS_PER_MINUTE = 600 // Rate limit protection (~10/s; Monad produces ~3.3 blocks/s)
 const REQUEST_COOLDOWN_MS = 120 // Minimum time between polls — must stay under the ~300ms block time
