@@ -72,3 +72,4 @@ mainnet/
 # Accidental / unused assets
 public/backgroud.png
 images.jpeg
+dist/
