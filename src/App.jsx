@@ -25,6 +25,17 @@ const MonadWorld3DPage = lazy(() => import('./pages/MonadWorld3DPage'))
 const AgoraWorldPage = lazy(() => import('./pages/AgoraWorldPage'))
 const AgoraWorld3DPage = lazy(() => import('./pages/AgoraWorld3DPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const WalletProviders = lazy(() => import('./wallet/WalletProviders'))
+
+function StakingRoute() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <WalletProviders>
+        <StakingPage />
+      </WalletProviders>
+    </Suspense>
+  )
+}
 
 function PageFallback() {
   return (
@@ -70,7 +81,7 @@ function AppContent() {
               }
             />
             <Route path="/price" element={<PricePage />} />
-            <Route path="/staking" element={<StakingPage />} />
+            <Route path="/staking" element={<StakingRoute />} />
             <Route path="/staking-calculator" element={<StakingCalculatorPage />} />
             <Route path="/validator-requirements" element={<ValidatorRequirementsPage />} />
             <Route path="/network" element={<BlockchainVizPage />} />

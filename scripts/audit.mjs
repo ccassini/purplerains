@@ -77,12 +77,45 @@ function cssRules(rel) {
   }
 }
 
-// ── 2. Lint config actually loads ─────────────────────────────────────────────
+// ── 2. Lint actually loads AND passes ─────────────────────────────────────────
+// Checking only that the config resolves is not enough: it once reported a clean
+// repo while `npm run lint` was failing with 22 errors, one of which was a
+// guaranteed ReferenceError in the render path of a live page.
 {
-  const out = sh('node node_modules/eslint/bin/eslint.js --print-config package.json 2>&1 || true')
-  if (/couldn't find the config|Failed to load|Cannot find module/i.test(out)) {
+  const cfg = sh('node node_modules/eslint/bin/eslint.js --print-config package.json 2>&1 || true')
+  if (/couldn't find the config|Failed to load|Cannot find module/i.test(cfg)) {
     add('FAIL', 'lint', 'ESLint config does not load — `npm run lint` is a no-op',
-      out.split('\n').find((l) => /config/i.test(l)) || '')
+      cfg.split('\n').find((l) => /config/i.test(l)) || '')
+  } else {
+    const raw = sh('node node_modules/eslint/bin/eslint.js . --ext js,jsx -f json 2>/dev/null || true')
+    let results = null
+    try { results = JSON.parse(raw) } catch { /* eslint produced no parsable output */ }
+    if (!results) {
+      add('WARN', 'lint', 'Could not read ESLint JSON output')
+    } else {
+      let errors = 0, warnings = 0
+      const byRule = new Map()
+      for (const f of results) {
+        for (const m of f.messages) {
+          if (m.severity === 2) {
+            errors++
+            const k = m.ruleId || 'parse-error'
+            if (!byRule.has(k)) byRule.set(k, [])
+            byRule.get(k).push(`${f.filePath.replace(ROOT, '')}:${m.line}`)
+          } else warnings++
+        }
+      }
+      if (errors) {
+        const top = [...byRule.entries()]
+          .sort((a, b) => b[1].length - a[1].length)
+          .map(([rule, at]) => `${rule} x${at.length} (${at[0]}${at.length > 1 ? ', …' : ''})`)
+        add('FAIL', 'lint', `ESLint reports ${errors} error(s)`, top.join(' · '))
+      }
+      // The lint script runs with --max-warnings 0, so warnings block it too.
+      if (warnings) {
+        add('WARN', 'lint', `ESLint reports ${warnings} warning(s) — \`npm run lint\` uses --max-warnings 0, so this fails CI`)
+      }
+    }
   }
 }
 

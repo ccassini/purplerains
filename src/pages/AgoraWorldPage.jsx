@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchAgoraData, fetchAusdTransfersAllChains } from '../utils/agoraApi'
+import { hashInt, jitterCoord, continentByLatLng } from '../utils/worldShared'
 import './AgoraWorldPage.css'
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -19,16 +20,6 @@ const CHAIN_LOGO_BY_ID = {
   747474: '/agora/katana%20logo.png',
 }
 
-function hashInt(input) {
-  let h = 2166136261
-  const s = String(input || '')
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return Math.abs(h >>> 0)
-}
-
 function easeOutCubic(t) {
   return 1 - (1 - t) ** 3
 }
@@ -39,16 +30,6 @@ function splitQuadratic(p0x, p0y, cpx, cpy, p1x, p1y, t) {
   const q1x = cpx + (p1x - cpx) * t
   const q1y = cpy + (p1y - cpy) * t
   return [q0x, q0y, q0x + (q1x - q0x) * t, q0y + (q1y - q0y) * t]
-}
-
-function jitterCoord(baseLat, baseLng, seedA, seedB, scale = 1) {
-  const latJitter = ((seedA % 1000) / 1000 - 0.5) * 0.8 * scale
-  const lngJitter = ((seedB % 1000) / 1000 - 0.5) * 1.1 * scale
-  const lat = Math.max(-89.8, Math.min(89.8, baseLat + latJitter))
-  let lng = baseLng + lngJitter
-  if (lng > 180) lng -= 360
-  if (lng < -180) lng += 360
-  return { lat, lng }
 }
 
 function formatLedAmount(amountDisplay, amountNum) {
@@ -73,16 +54,6 @@ function chainLogoFromTx(chainId, chainName) {
   return ''
 }
 
-function continentByLatLng(lat, lng) {
-  if (lat > 35 && lng >= -10 && lng <= 60) return 'Europe'
-  if (lat >= -35 && lat <= 38 && lng >= -20 && lng <= 55) return 'Africa'
-  if (lat >= 5 && lng >= 55 && lng <= 180) return 'Asia'
-  if (lat < -5 && lng >= 95 && lng <= 180) return 'Oceania'
-  if (lng >= -92 && lng <= -30 && lat >= -55 && lat <= 15) return 'South America'
-  if (lng >= -170 && lng <= -45 && lat >= 10) return 'North America'
-  return 'Other'
-}
-
 function applyMapTheme(map) {
   const style = map.getStyle()
   if (!style?.layers) return
@@ -98,37 +69,37 @@ function applyMapTheme(map) {
     const isBackground = layer.type === 'background' || id.includes('background')
 
     if (isBackground) {
-      try { map.setPaintProperty(layer.id, 'background-color', '#02050a') } catch {}
+      try { map.setPaintProperty(layer.id, 'background-color', '#02050a') } catch { /* basemap style may not define this layer/property */ }
     }
     if (isWater) {
       if (layer.type === 'fill') {
-        try { map.setPaintProperty(layer.id, 'fill-color', '#04132b') } catch {}
-        try { map.setPaintProperty(layer.id, 'fill-opacity', 0.985) } catch {}
+        try { map.setPaintProperty(layer.id, 'fill-color', '#04132b') } catch { /* basemap style may not define this layer/property */ }
+        try { map.setPaintProperty(layer.id, 'fill-opacity', 0.985) } catch { /* basemap style may not define this layer/property */ }
       }
       if (layer.type === 'line') {
-        try { map.setPaintProperty(layer.id, 'line-color', '#1b3b6b') } catch {}
-        try { map.setPaintProperty(layer.id, 'line-opacity', 0.86) } catch {}
+        try { map.setPaintProperty(layer.id, 'line-color', '#1b3b6b') } catch { /* basemap style may not define this layer/property */ }
+        try { map.setPaintProperty(layer.id, 'line-opacity', 0.86) } catch { /* basemap style may not define this layer/property */ }
       }
     }
     if (isLand) {
       if (layer.type === 'fill') {
-        try { map.setPaintProperty(layer.id, 'fill-color', '#050608') } catch {}
-        try { map.setPaintProperty(layer.id, 'fill-opacity', 0.985) } catch {}
+        try { map.setPaintProperty(layer.id, 'fill-color', '#050608') } catch { /* basemap style may not define this layer/property */ }
+        try { map.setPaintProperty(layer.id, 'fill-opacity', 0.985) } catch { /* basemap style may not define this layer/property */ }
       }
     }
     if (isBoundary && layer.type === 'line') {
-      try { map.setPaintProperty(layer.id, 'line-color', 'rgba(148,163,184,0.34)') } catch {}
-      try { map.setPaintProperty(layer.id, 'line-opacity', 0.72) } catch {}
+      try { map.setPaintProperty(layer.id, 'line-color', 'rgba(148,163,184,0.34)') } catch { /* basemap style may not define this layer/property */ }
+      try { map.setPaintProperty(layer.id, 'line-opacity', 0.72) } catch { /* basemap style may not define this layer/property */ }
     }
     if (isRoad && layer.type === 'line') {
-      try { map.setPaintProperty(layer.id, 'line-color', 'rgba(71,85,105,0.22)') } catch {}
-      try { map.setPaintProperty(layer.id, 'line-opacity', 0.22) } catch {}
+      try { map.setPaintProperty(layer.id, 'line-color', 'rgba(71,85,105,0.22)') } catch { /* basemap style may not define this layer/property */ }
+      try { map.setPaintProperty(layer.id, 'line-opacity', 0.22) } catch { /* basemap style may not define this layer/property */ }
     }
     if (isLabel) {
-      try { map.setPaintProperty(layer.id, 'text-color', '#8d7a38') } catch {}
-      try { map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(2,6,23,0.86)') } catch {}
-      try { map.setPaintProperty(layer.id, 'text-halo-width', 0.6) } catch {}
-      try { map.setLayerZoomRange(layer.id, 3.8, 22) } catch {}
+      try { map.setPaintProperty(layer.id, 'text-color', '#8d7a38') } catch { /* basemap style may not define this layer/property */ }
+      try { map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(2,6,23,0.86)') } catch { /* basemap style may not define this layer/property */ }
+      try { map.setPaintProperty(layer.id, 'text-halo-width', 0.6) } catch { /* basemap style may not define this layer/property */ }
+      try { map.setLayerZoomRange(layer.id, 3.8, 22) } catch { /* basemap style may not define this layer/property */ }
     }
   }
 }

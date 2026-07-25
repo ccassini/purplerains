@@ -4,6 +4,7 @@ import { useMonad } from '../contexts/MonadContext'
 import { fetchWorldValidators } from '../utils/gmonadsApi'
 import { fetchValidatorPerformance } from '../utils/validatorPerformanceApi'
 import { updateNowProposer, pushProposerTick } from '../utils/proposerTicker'
+import { formatStakeMon, formatCommission, normalizeHexId } from '../utils/worldShared'
 import './MonadWorld3DPage.css'
 
 const ARC_COLORS = ['rgba(168, 85, 247, 0.35)', 'rgba(233, 213, 255, 0.98)', 'rgba(192, 132, 252, 0.45)']
@@ -95,27 +96,6 @@ async function createCelestialDecor(globe, aliveRef, globeRef) {
   }
 
   return { start, stop, dispose }
-}
-
-function formatStakeMon(stake) {
-  const n = Number(stake || 0)
-  if (!Number.isFinite(n)) return '—'
-  return `${n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n.toLocaleString()} MON`
-}
-
-function formatCommission(commissionBps) {
-  const bps = Number(commissionBps || 0)
-  if (!Number.isFinite(bps)) return '—'
-  return `${(bps / 100).toFixed(2)}%`
-}
-
-function normalizeHexId(value) {
-  const raw = String(value || '').trim()
-  if (!raw) return null
-  let hex = raw.toLowerCase()
-  if (!hex.startsWith('0x')) hex = `0x${hex}`
-  if (!/^0x[a-f0-9]{40,160}$/.test(hex)) return null
-  return hex
 }
 
 const OVERLAP_GRID_DEG = 0.32
@@ -503,7 +483,7 @@ export default function MonadWorld3DPage() {
         // arc bursts; 1.5 is visually indistinguishable on this scene.
         try {
           globe.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
-        } catch {}
+        } catch { /* globe may be torn down or not expose this call */ }
 
         const controls = globe.controls()
         controls.autoRotate = true
@@ -517,7 +497,7 @@ export default function MonadWorld3DPage() {
         })
         controls.addEventListener('end', () => {
           controls.autoRotate = true
-          try { globe.resumeAnimation() } catch {}
+          try { globe.resumeAnimation() } catch { /* globe may be torn down or not expose this call */ }
         })
 
         let celestial = { start() {}, stop() {}, dispose() {} }
@@ -588,7 +568,7 @@ export default function MonadWorld3DPage() {
         pendingPayloadRef.current = null
         // Keep the arc flight just under the cadence so bursts never overlap.
         const travel = Math.max(120, Math.min(liveCadenceRef.current - 60, 180))
-        try { globeRef.current.arcDashAnimateTime(travel) } catch {}
+        try { globeRef.current.arcDashAnimateTime(travel) } catch { /* globe may be torn down or not expose this call */ }
         startArcAnimation(payload)
       }
       cadenceTimerRef.current = window.setTimeout(runTick, liveCadenceRef.current)

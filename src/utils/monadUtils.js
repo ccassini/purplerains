@@ -1,6 +1,6 @@
 import { createPublicClient, fallback, http } from 'viem'
 import { logger } from './logger'
-import { monad } from '../wallet/wagmiConfig'
+import { monad } from '../config/monadChain'
 
 /**
  * Creates a viem public client connection to Monad.

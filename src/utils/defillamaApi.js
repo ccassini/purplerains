@@ -609,13 +609,11 @@ export async function fetchMonadTVL(forceRefresh = false) {
  * Fetch chain revenue data (if available)
  */
 export async function fetchChainRevenue() {
-  try {
-    // DeFiLlama doesn't have direct revenue endpoint, but we can estimate from protocol fees
-    // For now, return null - can be enhanced later with other APIs
-    return null
-  } catch {
-    return null
-  }
+  // DeFiLlama has no direct revenue endpoint; this is a placeholder that callers
+  // already treat as "no data". Nothing here can throw, so the try/catch that
+  // used to wrap it made the catch clause unreachable — add it back alongside a
+  // real fetch when this is implemented.
+  return null
 }
 
 /**

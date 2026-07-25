@@ -165,4 +165,32 @@ api.write_text(pat.sub(new_block, text, count=1))
 print(f"Updated LOGO_EXTENSIONS ({len(ext_map)} entries)")
 PY
 
+echo "==> Building src/data/mainnetValidators.json..."
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+validators = []
+for p in sorted(Path("mainnet").glob("*.json")):
+    d = json.loads(p.read_text())
+    if not d.get("secp"):
+        continue
+    validators.append({
+        "id": d.get("id"),
+        "name": d.get("name") or "",
+        "secp": d.get("secp") or "",
+        "bls": d.get("bls") or "",
+        "logo": d.get("logo") or "",
+        "website": d.get("website") or "",
+        "description": d.get("description") or "",
+        "x": d.get("x") or "",
+        "decommissioned": bool(d.get("decommissioned")),
+    })
+validators.sort(key=lambda v: (v["id"] is None, v["id"] or 0))
+out = Path("src/data/mainnetValidators.json")
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(json.dumps(validators, ensure_ascii=False, separators=(",", ":")))
+print(f"Wrote {out} ({len(validators)} validators, {out.stat().st_size} bytes)")
+PY
+
 echo "==> Complete."

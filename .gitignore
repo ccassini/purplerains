@@ -65,6 +65,10 @@ PURPLE RAIN/
 .worldmonitor-ref/
 validators_data.json
 
+# Raw upstream validator-info clone (sync via scripts/download-logos.sh;
+# app loads src/data/mainnetValidators.json instead)
+mainnet/
+
 # Accidental / unused assets
 public/backgroud.png
 images.jpeg

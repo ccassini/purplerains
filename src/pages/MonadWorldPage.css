@@ -126,29 +126,34 @@
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
 }
 
-/* Current block producer — pop forward, larger logo, soft glow (no heavy frame) */
+/* Current block producer — pop forward, larger logo, soft glow (no heavy frame).
+   The box stays 22px; the logo is scaled to the old 40px look with a transform,
+   which the compositor handles without a layout pass. Ring/shadow radii below
+   are the original px divided by the 1.8182 scale (40/22) so the rendered
+   result matches what it was when the element itself grew to 40px. */
 .vm.vm-on {
-  width: 40px;
-  height: 40px;
   z-index: 40;
   contain: none;
   overflow: visible;
   border: none;
   background: transparent;
-  box-shadow:
-    0 0 0 2px rgba(244, 241, 255, 0.9),
-    0 0 0 5px rgba(167, 139, 250, 0.35),
-    0 0 22px 6px rgba(192, 132, 252, 0.55);
   position: relative;
 }
 .vm.vm-on .vm-img,
 .vm.vm-on .vm-fb {
-  box-shadow: 0 4px 14px rgba(4, 2, 12, 0.45);
+  transform: scale(1.8182);
+  box-shadow:
+    0 0 0 1.1px rgba(244, 241, 255, 0.9),
+    0 0 0 2.75px rgba(167, 139, 250, 0.35),
+    0 0 12.1px 3.3px rgba(192, 132, 252, 0.55),
+    0 2.2px 7.7px rgba(4, 2, 12, 0.45);
 }
 .vm.vm-on::after {
   content: '';
   position: absolute;
-  inset: -12px;
+  /* Outer glow used to be inset:-12px on a 40px box (64px across). The box is
+     22px now, so -21px reproduces the same 64px footprint. */
+  inset: -21px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(192, 132, 252, 0.45), transparent 68%);
   animation: vm-pulse 1.15s ease-in-out infinite;

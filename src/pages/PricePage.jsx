@@ -1586,7 +1586,7 @@ export default function PricePage() {
           </div>
           <div className="price-btc">
             <div className="label">BTC</div>
-            <div className="value">${formatUsd2(btcPrice)}</div>
+            <div className="value">${formatUsdExact(btcPrice)}</div>
           </div>
           <div className="price-change">
             <div className="label">24h Change</div>

@@ -1,28 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchAgoraData, fetchAusdTransfersAllChains } from '../utils/agoraApi'
+import { hashInt, jitterCoord, continentByLatLng } from '../utils/worldShared'
 import './AgoraWorld3DPage.css'
-
-function hashInt(input) {
-  let h = 2166136261
-  const s = String(input || '')
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return Math.abs(h >>> 0)
-}
-
-function jitterCoord(baseLat, baseLng, seedA, seedB, scale = 1) {
-  // Tiny deterministic jitter so repeated routes do not overlap perfectly.
-  const latJitter = ((seedA % 1000) / 1000 - 0.5) * 0.9 * scale
-  const lngJitter = ((seedB % 1000) / 1000 - 0.5) * 1.2 * scale
-  const lat = Math.max(-89.8, Math.min(89.8, baseLat + latJitter))
-  let lng = baseLng + lngJitter
-  if (lng > 180) lng -= 360
-  if (lng < -180) lng += 360
-  return { lat, lng }
-}
 
 function anchoredCoord(baseLat, baseLng, seed, laneIndex = 0, laneCount = 1, maxOffsetDeg = 0.18) {
   // Keep arc endpoints attached to node vicinity, not drifting around map.
@@ -36,17 +16,6 @@ function anchoredCoord(baseLat, baseLng, seed, laneIndex = 0, laneCount = 1, max
   if (lng > 180) lng -= 360
   if (lng < -180) lng += 360
   return { lat, lng }
-}
-
-function continentByLatLng(lat, lng) {
-  // Lightweight geo bucketing for visual routing only.
-  if (lat > 35 && lng >= -10 && lng <= 60) return 'Europe'
-  if (lat >= -35 && lat <= 38 && lng >= -20 && lng <= 55) return 'Africa'
-  if (lat >= 5 && lng >= 55 && lng <= 180) return 'Asia'
-  if (lat < -5 && lng >= 95 && lng <= 180) return 'Oceania'
-  if (lng >= -92 && lng <= -30 && lat >= -55 && lat <= 15) return 'South America'
-  if (lng >= -170 && lng <= -45 && lat >= 10) return 'North America'
-  return 'Other'
 }
 
 function formatAmountForUi(amountDisplay, fallbackAmount) {

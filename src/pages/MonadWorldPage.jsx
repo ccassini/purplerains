@@ -5,6 +5,7 @@ import { fetchWorldValidators } from '../utils/gmonadsApi'
 import { fetchValidatorPerformance } from '../utils/validatorPerformanceApi'
 import { updateNowProposer, pushProposerTick } from '../utils/proposerTicker'
 import { logger } from '../utils/logger'
+import { formatStakeMon, formatCommission, normalizeHexId } from '../utils/worldShared'
 import './MonadWorldPage.css'
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -53,27 +54,6 @@ function mercY(lat) {
 const ARC_STREAK_COLOR = 'rgb(196,171,255)'
 const ARC_CORE_COLOR = 'rgb(233,213,255)'
 const TAU = Math.PI * 2
-
-function formatStakeMon(stake) {
-  const n = Number(stake || 0)
-  if (!Number.isFinite(n)) return '—'
-  return `${n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n.toLocaleString()} MON`
-}
-
-function formatCommission(commissionBps) {
-  const bps = Number(commissionBps || 0)
-  if (!Number.isFinite(bps)) return '—'
-  return `${(bps / 100).toFixed(2)}%`
-}
-
-function normalizeHexId(value) {
-  const raw = String(value || '').trim()
-  if (!raw) return null
-  let hex = raw.toLowerCase()
-  if (!hex.startsWith('0x')) hex = `0x${hex}`
-  if (!/^0x[a-f0-9]{40,160}$/.test(hex)) return null
-  return hex
-}
 
 function createMarkerEl(v) {
   const el = document.createElement('div')
@@ -218,7 +198,7 @@ export default function MonadWorldPage() {
         if (!aliveRef.current) return
 
         STYLE_OVERRIDES.forEach(([layer, prop, val]) => {
-          try { map.setPaintProperty(layer, prop, val) } catch {}
+          try { map.setPaintProperty(layer, prop, val) } catch { /* basemap style may not define this layer/property */ }
         })
 
         const style = map.getStyle()
@@ -233,7 +213,7 @@ export default function MonadWorldPage() {
                   'interpolate', ['linear'], ['zoom'],
                   3.5, 0, 4.5, 0.5, 6, 0.75,
                 ])
-              } catch {}
+              } catch { /* basemap style may not define this layer/property */ }
             }
           }
         }

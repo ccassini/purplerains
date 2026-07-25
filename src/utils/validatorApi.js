@@ -20,34 +20,34 @@ let validatorCache = {
 
 // Validator logo file extensions mapping (auto-generated from downloaded logos)
 const LOGO_EXTENSIONS = {
-  1: 'png', 2: 'png', 3: 'png', 4: 'png', 5: 'png', 6: 'png', 7: 'png', 8: 'jpg',
-  9: 'png', 10: 'png', 11: 'png', 12: 'png', 13: 'png', 14: 'png', 15: 'png', 16: 'svg',
-  17: 'png', 18: 'jpg', 19: 'png', 20: 'png', 21: 'png', 22: 'png', 23: 'svg', 24: 'png',
-  25: 'jpg', 26: 'png', 27: 'jpg', 28: 'png', 29: 'png', 30: 'png', 31: 'png', 32: 'png',
-  33: 'png', 34: 'png', 35: 'png', 36: 'jpg', 37: 'png', 38: 'png', 39: 'jpg', 40: 'png',
-  41: 'png', 42: 'png', 43: 'png', 44: 'svg', 45: 'png', 46: 'png', 47: 'png', 48: 'svg',
-  49: 'jpg', 50: 'png', 51: 'svg', 52: 'png', 54: 'svg', 55: 'png', 56: 'svg', 57: 'jpg',
-  58: 'png', 59: 'png', 60: 'png', 61: 'png', 62: 'jpg', 63: 'png', 64: 'png', 65: 'png',
-  66: 'png', 67: 'png', 68: 'png', 69: 'png', 70: 'jpg', 71: 'png', 72: 'png', 73: 'svg',
-  74: 'png', 75: 'png', 76: 'jpg', 77: 'png', 78: 'png', 79: 'jpg', 80: 'png', 81: 'jpg',
-  82: 'png', 83: 'png', 84: 'png', 85: 'png', 86: 'png', 87: 'jpg', 88: 'svg', 89: 'png',
-  90: 'png', 91: 'png', 92: 'png', 93: 'png', 94: 'png', 95: 'png', 96: 'png', 97: 'png',
-  98: 'jpg', 99: 'png', 100: 'png', 101: 'png', 102: 'png', 103: 'png', 104: 'jpg', 105: 'png',
-  106: 'jpg', 107: 'png', 108: 'png', 109: 'jpg', 110: 'png', 111: 'svg', 112: 'png', 113: 'png',
-  114: 'png', 115: 'jpg', 116: 'png', 117: 'png', 118: 'png', 119: 'jpg', 120: 'png', 121: 'png',
-  122: 'png', 123: 'png', 124: 'png', 125: 'png', 126: 'png', 127: 'jpg', 128: 'png', 129: 'png',
-  130: 'png', 131: 'jpg', 132: 'png', 133: 'png', 134: 'jpg', 135: 'png', 136: 'png', 137: 'jpg',
-  138: 'png', 139: 'png', 140: 'jpg', 141: 'png', 142: 'png', 143: 'png', 144: 'png', 145: 'png',
-  146: 'png', 147: 'png', 148: 'png', 149: 'jpg', 150: 'png', 151: 'webp', 152: 'png', 153: 'png',
-  154: 'png', 155: 'png', 156: 'png', 157: 'svg', 158: 'jpg', 159: 'svg', 160: 'png', 161: 'png',
-  162: 'png', 163: 'jpg', 164: 'png', 165: 'jpg', 166: 'svg', 167: 'jpg', 168: 'png', 169: 'png',
-  170: 'svg', 171: 'png', 172: 'png', 173: 'png', 174: 'png', 175: 'png', 176: 'jpg', 177: 'jpg',
-  178: 'png', 179: 'png', 181: 'png', 182: 'png', 183: 'jpg', 184: 'jpg', 185: 'png', 186: 'jpg',
-  187: 'png', 188: 'png', 189: 'png', 190: 'png', 191: 'png', 192: 'png', 193: 'png', 194: 'png',
-  195: 'png', 196: 'jpg', 197: 'png', 198: 'jpg', 199: 'png', 200: 'png', 201: 'png', 202: 'jpg',
-  203: 'jpg', 204: 'png', 205: 'png', 206: 'png', 207: 'jpg', 208: 'jpg', 209: 'png', 210: 'png',
-  211: 'jpg', 212: 'png', 213: 'png', 214: 'jpg', 215: 'png', 216: 'jpg', 217: 'png', 218: 'jpg',
-  219: 'jpg', 220: 'png', 221: 'png',
+  1: 'webp', 2: 'webp', 3: 'webp', 4: 'png', 5: 'webp', 6: 'webp', 7: 'webp', 8: 'webp',
+  9: 'webp', 10: 'webp', 11: 'webp', 12: 'webp', 13: 'webp', 14: 'webp', 15: 'webp', 16: 'svg',
+  17: 'webp', 18: 'webp', 19: 'webp', 20: 'webp', 21: 'webp', 22: 'webp', 23: 'svg', 24: 'webp',
+  25: 'webp', 26: 'webp', 27: 'webp', 28: 'webp', 29: 'webp', 30: 'webp', 31: 'webp', 32: 'webp',
+  33: 'webp', 34: 'webp', 35: 'webp', 36: 'webp', 37: 'webp', 38: 'webp', 39: 'webp', 40: 'webp',
+  41: 'webp', 42: 'webp', 43: 'webp', 44: 'svg', 45: 'webp', 46: 'webp', 47: 'webp', 48: 'svg',
+  49: 'webp', 50: 'webp', 51: 'svg', 52: 'webp', 54: 'svg', 55: 'webp', 56: 'svg', 57: 'webp',
+  58: 'webp', 59: 'webp', 60: 'webp', 61: 'webp', 62: 'webp', 63: 'webp', 64: 'webp', 65: 'webp',
+  66: 'webp', 67: 'webp', 68: 'webp', 69: 'webp', 70: 'webp', 71: 'webp', 72: 'webp', 73: 'svg',
+  74: 'webp', 75: 'webp', 76: 'webp', 77: 'webp', 78: 'webp', 79: 'webp', 80: 'webp', 81: 'webp',
+  82: 'webp', 83: 'webp', 84: 'webp', 85: 'webp', 86: 'webp', 87: 'webp', 88: 'svg', 89: 'webp',
+  90: 'webp', 91: 'webp', 92: 'webp', 93: 'webp', 94: 'webp', 95: 'webp', 96: 'webp', 97: 'webp',
+  98: 'webp', 99: 'webp', 100: 'webp', 101: 'webp', 102: 'webp', 103: 'webp', 104: 'webp', 105: 'webp',
+  106: 'webp', 107: 'webp', 108: 'webp', 109: 'webp', 110: 'webp', 111: 'svg', 112: 'webp', 113: 'webp',
+  114: 'webp', 115: 'webp', 116: 'webp', 117: 'webp', 118: 'webp', 119: 'webp', 120: 'webp', 121: 'webp',
+  122: 'webp', 123: 'webp', 124: 'webp', 125: 'webp', 126: 'webp', 127: 'webp', 128: 'webp', 129: 'webp',
+  130: 'webp', 131: 'webp', 132: 'webp', 133: 'webp', 134: 'webp', 135: 'webp', 136: 'webp', 137: 'webp',
+  138: 'webp', 139: 'webp', 140: 'webp', 141: 'webp', 142: 'webp', 143: 'webp', 144: 'webp', 145: 'webp',
+  146: 'webp', 147: 'webp', 148: 'webp', 149: 'webp', 150: 'webp', 151: 'webp', 152: 'webp', 153: 'webp',
+  154: 'webp', 155: 'webp', 156: 'webp', 157: 'svg', 158: 'webp', 159: 'svg', 160: 'webp', 161: 'webp',
+  162: 'webp', 163: 'webp', 164: 'webp', 165: 'webp', 166: 'svg', 167: 'webp', 168: 'webp', 169: 'webp',
+  170: 'svg', 171: 'webp', 172: 'webp', 173: 'webp', 174: 'webp', 175: 'webp', 176: 'webp', 177: 'webp',
+  178: 'webp', 179: 'webp', 181: 'webp', 182: 'webp', 183: 'webp', 184: 'webp', 185: 'webp', 186: 'webp',
+  187: 'webp', 188: 'webp', 189: 'webp', 190: 'webp', 191: 'webp', 192: 'webp', 193: 'webp', 194: 'webp',
+  195: 'webp', 196: 'webp', 197: 'webp', 198: 'webp', 199: 'webp', 200: 'webp', 201: 'webp', 202: 'webp',
+  203: 'webp', 204: 'webp', 205: 'webp', 206: 'webp', 207: 'webp', 208: 'webp', 209: 'webp', 210: 'webp',
+  211: 'webp', 212: 'webp', 213: 'webp', 214: 'webp', 215: 'webp', 216: 'webp', 217: 'webp', 218: 'webp',
+  219: 'webp', 220: 'webp', 221: 'webp',
 }
 
 // Default placeholder for unknown validators
@@ -72,30 +72,28 @@ export function getLocalLogoPath(validatorId) {
 }
 
 /**
- * Load all validator metadata from local mainnet folder
- * These are pre-downloaded from https://github.com/monad-developers/validator-info
+ * Load all validator metadata from the generated mainnet bundle.
+ * Source of truth: https://github.com/monad-developers/validator-info
+ * Rebuild with: ./scripts/download-logos.sh
  */
 export async function loadValidatorMetadata() {
   if (validatorCache.loading) return
   if (validatorCache.byId.size > 0) return // Already loaded
-  
+
   validatorCache.loading = true
-  
+
   try {
-    // Import all JSON files from mainnet folder dynamically
-    // Use relative path from src folder - Vite resolves from project root
-    const modules = import.meta.glob('../../mainnet/*.json', { eager: true })
-    
-    for (const path in modules) {
-      const validator = modules[path].default || modules[path]
-      if (validator && validator.secp) {
-        validatorCache.bySecp.set(validator.secp.toLowerCase(), validator)
-        if (validator.id) {
+    const mod = await import('../data/mainnetValidators.json')
+    const list = mod.default || mod
+    for (const validator of list) {
+      if (validator?.secp) {
+        validatorCache.bySecp.set(String(validator.secp).toLowerCase(), validator)
+        if (validator.id != null) {
           validatorCache.byId.set(validator.id, validator)
         }
       }
     }
-    
+
     validatorCache.lastFetch = Date.now()
     logger.log(`Loaded ${validatorCache.bySecp.size} validator metadata entries`)
   } catch (error) {

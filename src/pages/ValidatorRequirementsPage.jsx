@@ -133,12 +133,19 @@ MF_BUCKET=https://bucket.monadinfra.com
 curl -o /home/monad/.env $MF_BUCKET/config/mainnet/latest/.env.example
 curl -o /home/monad/monad-bft/config/node.toml $MF_BUCKET/config/mainnet/latest/node.toml
 
-# Step 9: Generate keystore password
+# Step 9: Generate keystore password (keep offline — never commit or paste into chat)
 echo "🔐 Generating keystore password..."
 sed -i "s|^KEYSTORE_PASSWORD=$|KEYSTORE_PASSWORD='$(openssl rand -base64 32)'|" /home/monad/.env
 source /home/monad/.env
 mkdir -p /opt/monad/backup/
-echo "Keystore password: ${dollar}{KEYSTORE_PASSWORD}" >> /opt/monad/backup/keystore-password-backup
+# Print once to the terminal so you can store it in a password manager.
+# Do NOT write the password to a plaintext file on disk.
+echo ""
+echo "⚠️  SAVE THIS PASSWORD OFFLINE (password manager / sealed backup)."
+echo "   It will NOT be written to disk by this script."
+echo "Keystore password: ${dollar}{KEYSTORE_PASSWORD}"
+echo ""
+read -r -p "Press Enter after you have saved the password securely..."
 
 # Step 10: Generate keystores
 echo "🔑 Generating keystores..."
@@ -197,7 +204,7 @@ echo ""
 echo "2. Backup these files to external location:"
 echo "   - /opt/monad/backup/secp-backup"
 echo "   - /opt/monad/backup/bls-backup"
-echo "   - /opt/monad/backup/keystore-password-backup"
+echo "   - Your keystore password (password manager / sealed offline backup — NOT a plaintext file)"
 echo ""
 echo "3. Run hard reset to import database snapshot:"
 echo "   See: https://docs.monad.xyz/node-ops/node-recovery/hard-reset"
