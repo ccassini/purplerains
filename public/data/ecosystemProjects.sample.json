@@ -1,0 +1,20 @@
+[
+  {
+    "id": "blockvision",
+    "name": "BlockVision",
+    "logo": "https://example.com/logos/blockvision.png",
+    "website": "https://blockvision.org",
+    "description": "BlockVision provides blockchain infrastructure services, offering APIs, RPC services to empower developers and users alike.",
+    "category": "Infra",
+    "tvl": null
+  },
+  {
+    "id": "a-priori",
+    "name": "aPriori",
+    "logo": "https://example.com/logos/apriori.png",
+    "website": "https://apriori.io",
+    "description": "MEV infrastructure and liquid staking protocol, designed for the parallel execution era and natively built on Monad.",
+    "category": "LST",
+    "tvl": 30000000
+  }
+]

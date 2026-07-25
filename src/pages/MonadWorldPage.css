@@ -1,0 +1,711 @@
+/* ========================================================
+   MonadWorldPage — Purple Rain World Map
+   ======================================================== */
+
+.mw {
+  position: fixed;
+  inset: 0;
+  background: #06040e;
+  overflow: hidden;
+  z-index: 1;
+  font-family: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--mw-text);
+  -webkit-font-smoothing: antialiased;
+
+  /* Premium chrome design tokens (UI chrome only — map/globe rendering and
+     background are untouched and don't read these). */
+  --mw-accent: #7c6bff;
+  --mw-accent2: #a88bff;
+  --mw-text: #f4f1ff;
+  --mw-text2: rgba(244, 241, 255, .62);
+  --mw-text3: rgba(244, 241, 255, .36);
+  --mw-line: rgba(255, 255, 255, .08);
+  --mw-line2: rgba(255, 255, 255, .14);
+  --mw-glass: rgba(22, 16, 38, .66);
+  --mw-glass2: rgba(30, 22, 50, .5);
+  /* Used by the panels that sit permanently over the animating map. They cannot
+     use backdrop-filter: the arcs repaint every frame, so the blurred backdrop
+     is never cacheable and the compositor re-blurs each panel on every single
+     frame. These are opaque enough to read as the same frosted panel without
+     one. Transient overlays (tooltip, validator card) keep their blur. */
+  --mw-panel: rgba(20, 14, 34, .92);
+  --mw-teal: #2de8c4;
+  --mw-pos: #5ce0a8;
+  --mw-neg: #ff8092;
+  --mw-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+.mw-map {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.mw-arc-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  contain: strict;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Disable marker hit-testing during map drag — saves 200+ hit-tests per frame */
+.mw.mw-dragging .vm { pointer-events: none; }
+
+.mw .maplibregl-canvas { outline: none; }
+.mw .maplibregl-ctrl-attrib,
+.mw .maplibregl-ctrl-logo,
+.mw .maplibregl-ctrl-group { display: none !important; }
+
+.mw::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(6, 4, 14, 0.45) 100%);
+  contain: strict;
+}
+
+/* ================================================================
+   MARKERS
+   ================================================================ */
+
+.vm {
+  --vm-size: 22px;
+  width: var(--vm-size);
+  height: var(--vm-size);
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  background: #110e1f;
+  border: 1.5px solid rgba(139, 92, 246, 0.22);
+  contain: layout style paint;
+  will-change: width, height, box-shadow;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: subpixel-antialiased;
+  transition:
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.2s ease,
+    border-width 0.2s ease;
+}
+.vm:hover {
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
+  z-index: 15;
+}
+
+.vm-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.vm-fb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2a1762, #15102a);
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+/* Current block producer — pop forward, larger logo, soft glow (no heavy frame) */
+.vm.vm-on {
+  width: 40px;
+  height: 40px;
+  z-index: 40;
+  contain: none;
+  overflow: visible;
+  border: none;
+  background: transparent;
+  box-shadow:
+    0 0 0 2px rgba(244, 241, 255, 0.9),
+    0 0 0 5px rgba(167, 139, 250, 0.35),
+    0 0 22px 6px rgba(192, 132, 252, 0.55);
+  position: relative;
+}
+.vm.vm-on .vm-img,
+.vm.vm-on .vm-fb {
+  box-shadow: 0 4px 14px rgba(4, 2, 12, 0.45);
+}
+.vm.vm-on::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(192, 132, 252, 0.45), transparent 68%);
+  animation: vm-pulse 1.15s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes vm-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ================================================================
+   ZOOM CONTROLS
+   ================================================================ */
+
+.mw-zoom {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 15px;
+  background: var(--mw-panel);
+  border: 1px solid var(--mw-line);
+  box-shadow: 0 12px 30px rgba(4, 2, 12, 0.4);
+}
+.mw-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--mw-text2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
+}
+.mw-zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mw-text);
+  border-color: var(--mw-line);
+}
+.mw-zoom-btn:active { transform: scale(0.92); }
+
+.mw-zoom-sep {
+  height: 1px;
+  background: var(--mw-line);
+  margin: 2px 4px;
+}
+
+/* ================================================================
+   TOP BAR
+   ================================================================ */
+
+.mw-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, rgba(10, 7, 20, 0.95), rgba(10, 7, 20, 0.74) 62%, rgba(10, 7, 20, 0.34) 88%, transparent);
+  border-bottom: 1px solid var(--mw-line);
+}
+
+.mw-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mw-logo-badge {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(150deg, rgba(124, 107, 255, 0.28), rgba(124, 107, 255, 0.06));
+  border: 1px solid rgba(124, 107, 255, 0.35);
+  box-shadow: 0 4px 12px rgba(124, 107, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+.mw-logo { width: 16px; height: 16px; }
+.mw-brand-text { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.mw-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--mw-text);
+  white-space: nowrap;
+}
+.mw-subtitle {
+  font-size: 9px;
+  color: var(--mw-text3);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* Compact current producer + rightward name ticker */
+.mw-now {
+  flex: 0 0 auto;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(18, 14, 36, 0.78);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  contain: layout style;
+}
+.mw-now-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(124, 107, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.28);
+  will-change: transform;
+}
+.mw-now-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+}
+.mw-now-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mw-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}
+.mw-now-loc { display: none !important; }
+.mw-now-block {
+  margin-left: 2px;
+  flex-shrink: 0;
+  font-family: var(--mw-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mw-text2);
+  letter-spacing: 0.01em;
+  min-width: 5ch;
+  text-align: right;
+}
+.mw-now.is-pop .mw-now-img {
+  animation: mw-now-pop 0.28s cubic-bezier(0.22, 1.35, 0.36, 1) both;
+}
+.mw-now.is-tick .mw-now-block {
+  animation: mw-now-tick 0.18s ease-out both;
+}
+@keyframes mw-now-pop {
+  from { transform: scale(0.75); opacity: 0.5; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes mw-now-tick {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.mw-ticker-wrap {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 90%, transparent);
+  contain: layout style;
+}
+.mw-ticker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 0 2px;
+  /* Newest prepends left → older chips drift right */
+}
+.mw-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  background: rgba(18, 14, 36, 0.55);
+  border: 1px solid rgba(139, 92, 246, 0.14);
+  border-radius: 7px;
+  font-size: 10px;
+  color: var(--mw-text2);
+  flex-shrink: 0;
+  contain: layout style paint;
+}
+.mw-tick.mw-tick-new {
+  color: var(--mw-text);
+  background: rgba(124, 107, 255, 0.14);
+  border-color: rgba(124, 107, 255, 0.32);
+  animation: mw-tick-in 0.28s ease-out both;
+}
+.mw-tick-img {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.mw-tick-name {
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 560;
+}
+.mw-tick-block { display: none; }
+
+@keyframes mw-tick-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.mw-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mw-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--mw-glass);
+  border: 1px solid var(--mw-line);
+  border-radius: 11px;
+  padding: 6px 12px;
+  /* No backdrop-filter here on purpose: these chips sit inside .mw-bar, which
+     already blurs the same backdrop. Nesting a second blur costs an extra
+     compositor pass per chip on every frame the map repaints (which is every
+     frame while arcs animate) and is not visible through the bar's own blur. */
+}
+.mw-chip-label {
+  font-size: 9px;
+  color: var(--mw-text3);
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-weight: 600;
+}
+.mw-chip-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mw-text);
+  font-family: var(--mw-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-chip-live {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+}
+.mw-chip-live span:last-child {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mw-text2);
+}
+.mw-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mw-neg);
+  box-shadow: 0 0 8px var(--mw-neg);
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.mw-chip-live.is-live .mw-live-dot {
+  background: var(--mw-pos);
+  box-shadow: 0 0 8px var(--mw-pos);
+  opacity: 1;
+  animation: mw-live-pulse 1.8s ease infinite;
+}
+@keyframes mw-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ================================================================
+   TOOLTIP
+   ================================================================ */
+
+.mw-tooltip {
+  position: absolute;
+  top: 82px;
+  right: 20px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--mw-glass);
+  border: 1px solid var(--mw-line2);
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 26px rgba(4, 2, 12, 0.5);
+  animation: mw-fade 0.15s ease-out;
+}
+
+.mw-validator-card {
+  position: absolute;
+  left: 20px;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  z-index: 14;
+  width: min(324px, calc(100vw - 40px));
+  background: var(--mw-glass);
+  border: 1px solid var(--mw-line);
+  border-radius: 18px;
+  box-shadow: 0 22px 55px rgba(4, 2, 12, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  backdrop-filter: blur(20px);
+  animation: mw-card-in 0.4s cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes mw-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.mw-validator-close {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--mw-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--mw-text3);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.16s;
+}
+.mw-validator-close:hover { color: var(--mw-text); border-color: var(--mw-line2); }
+.mw-validator-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-right: 28px;
+  margin-bottom: 13px;
+}
+.mw-validator-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  object-fit: cover;
+  border: 1px solid var(--mw-line2);
+}
+.mw-validator-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mw-text);
+}
+.mw-validator-sub {
+  font-size: 10px;
+  color: var(--mw-text3);
+  font-family: var(--mw-mono);
+  margin-top: 2px;
+}
+.mw-validator-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mw-validator-item {
+  border: 1px solid var(--mw-line);
+  background: var(--mw-glass2);
+  border-radius: 10px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mw-validator-item span {
+  font-size: 9px;
+  color: var(--mw-text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.mw-validator-item strong {
+  font-size: 13px;
+  color: var(--mw-text);
+  font-weight: 600;
+  font-family: var(--mw-mono);
+}
+.mw-validator-meta {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--mw-accent2);
+}
+.mw-validator-meta-err {
+  color: var(--mw-neg);
+}
+.mw-validator-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 11px;
+  padding: 10px;
+  border-radius: 11px;
+  background: rgba(124, 107, 255, 0.12);
+  border: 1px solid rgba(124, 107, 255, 0.24);
+  font-size: 12px;
+  font-weight: 500;
+  color: #d8ceff;
+  transition: all 0.16s;
+}
+.mw-validator-link:hover {
+  background: rgba(124, 107, 255, 0.2);
+  text-decoration: none;
+}
+@keyframes mw-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.mw-tt-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--mw-line2);
+}
+.mw-tt-text { display: flex; flex-direction: column; gap: 1px; }
+.mw-tt-id { font-size: 10px; color: var(--mw-text3); font-family: var(--mw-mono); }
+.mw-tt-name { font-size: 13px; color: var(--mw-text); font-weight: 600; }
+.mw-tt-loc { font-size: 11px; color: var(--mw-text2); margin-top: 1px; }
+
+/* ================================================================
+   LOADING & ERROR
+   ================================================================ */
+
+.mw-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #06040e;
+  z-index: 50;
+  color: var(--mw-text2);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.mw-spinner {
+  width: 38px;
+  height: 38px;
+  border: 2.5px solid rgba(124, 107, 255, 0.2);
+  border-top-color: var(--mw-accent);
+  border-radius: 50%;
+  animation: mw-spin 0.8s linear infinite;
+}
+@keyframes mw-spin { to { transform: rotate(360deg); } }
+
+.mw-err { color: #f87171; font-size: 14px; }
+.mw-retry {
+  margin-top: 8px;
+  padding: 10px 28px;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ================================================================
+   WATERMARK
+   ================================================================ */
+
+.mw-watermark {
+  position: absolute;
+  bottom: calc(6vh + 48px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(22px, 5vw, 58px);
+  letter-spacing: 0.3em;
+  color: rgba(244, 241, 255, 0.035);
+  font-weight: 700;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+}
+
+/* ================================================================
+   MOBILE
+   ================================================================ */
+
+@media (max-width: 768px) {
+  .mw-bar {
+    padding: 9px 12px;
+    gap: 10px;
+  }
+  .mw-logo-badge { width: 30px; height: 30px; border-radius: 9px; }
+  .mw-logo { width: 17px; height: 17px; }
+  .mw-title { font-size: 11px; letter-spacing: 0.08em; }
+  .mw-subtitle { display: none; }
+  .mw-chip { padding: 5px 9px; }
+  .mw-chip-label { font-size: 8px; }
+  .mw-chip-val { font-size: 10px; }
+  .mw-chip-live { padding: 5px 10px; }
+
+  .mw-now { padding: 3px 7px; gap: 6px; max-width: 160px; }
+  .mw-now-img { width: 20px; height: 20px; border-radius: 5px; }
+  .mw-now-name { font-size: 10px; max-width: 72px; }
+  .mw-now-loc { display: none !important; }
+  .mw-now-block { font-size: 9px; min-width: 4.5ch; }
+  .mw-ticker-wrap { height: 24px; }
+
+  .mw-zoom { right: 10px; }
+  .mw-zoom-btn { width: 36px; height: 36px; }
+
+  .mw-tooltip {
+    top: auto; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); right: 10px; left: 10px; justify-content: center;
+  }
+  .mw-validator-card {
+    left: 10px;
+    right: 10px;
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+  }
+
+  .mw-watermark { letter-spacing: 0.15em; }
+}
+
+@media (max-width: 480px) {
+  .mw-bar { padding: 7px 10px; gap: 7px; }
+  .mw-title { font-size: 10px; letter-spacing: 0.05em; }
+  .mw-logo-badge { width: 26px; height: 26px; }
+  .mw-logo { width: 15px; height: 15px; }
+  .mw-chip { padding: 4px 7px; gap: 3px; }
+  .mw-chip-val { font-size: 9px; }
+
+  .mw-now { padding: 2px 6px; max-width: 140px; }
+  .mw-now-img { width: 18px; height: 18px; }
+  .mw-now-name { font-size: 9px; max-width: 56px; }
+  .mw-now-block { font-size: 9px; }
+
+  .mw-zoom { right: 8px; }
+  .mw-zoom-btn { width: 34px; height: 34px; }
+
+  .mw-tooltip { bottom: 60px; left: 8px; right: 8px; padding: 8px 10px; }
+}

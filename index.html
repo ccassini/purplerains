@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="msapplication-TileColor" content="#0a0a0f">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="color-scheme" content="dark">
+    <link rel="icon" href="/monad_logo.png" type="image/png">
+    <link rel="apple-touch-icon" href="/monad_logo.png">
+    <link rel="manifest" href="/manifest.json">
+    <title>Purple Rain - Monad Blockchain Visualization</title>
+    <meta name="description" content="Real-time visualization of Monad blockchain transactions as purple rain">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://purplerains.xyz/">
+    <meta property="og:title" content="Purple Rain - Monad Blockchain Visualization">
+    <meta property="og:description" content="Real-time visualization of Monad blockchain transactions, staking, validators & ecosystem">
+    <meta property="og:image" content="https://purplerains.xyz/monad_logo.png">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://purplerains.xyz/">
+    <meta name="twitter:title" content="Purple Rain - Monad Blockchain">
+    <meta name="twitter:description" content="Real-time visualization of Monad blockchain transactions, staking, validators & ecosystem">
+    <meta name="twitter:image" content="https://purplerains.xyz/monad_logo.png">
+    
+    <!-- Canonical -->
+    <link rel="canonical" href="https://purplerains.xyz/">
+    
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Preload critical images for immediate caching -->
+    <link rel="preload" href="/drops/defi.png" as="image" type="image/png">
+    <link rel="preload" href="/drops/nft.png" as="image" type="image/png">
+    <link rel="preload" href="/drops/transfer.png" as="image" type="image/png">
+    <link rel="preload" href="/drops/contract-call.png" as="image" type="image/png">
+    <link rel="preload" href="/drops/contract-deploy.png" as="image" type="image/png">
+    <link rel="preload" href="/drops/other.png" as="image" type="image/png">
+    <link rel="preload" href="/background.png" as="image" type="image/png">
+    <link rel="preload" href="/monad_logo.png" as="image" type="image/png">
+    
+    <!-- DNS prefetch for potential external resources -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//fonts.gstatic.com">
+    
+    <!-- Font with display=swap for better performance -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a0f;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        
+        #root {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh; /* Dynamic viewport height for mobile */
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Safe area for notched phones */
+        @supports (padding: max(0px)) {
+            #root {
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+            }
+        }
+        
+        /* Prevent zoom on double tap for iOS */
+        * {
+            touch-action: manipulation;
+        }
+        
+        /* Optimize image loading */
+        img {
+            content-visibility: auto;
+            contain: layout style paint;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+</body>
+</html> 

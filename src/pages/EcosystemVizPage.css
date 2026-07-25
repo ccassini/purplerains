@@ -1,0 +1,366 @@
+/* Ecosystem Viz Page - same layout as Network, project images from /ecosystem */
+.ecosystem-viz-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 120% at 50% 18%, rgba(90, 70, 180, 0.16), rgba(5, 6, 10, 1));
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  margin: 0;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.ecosystem-viz-bg-text {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 92vw;
+  max-width: 92vw;
+  font-size: clamp(1.75rem, 10vmin, 6rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(139, 92, 246, 0.065);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 0;
+  user-select: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-shadow: 0 0 50px rgba(139, 92, 246, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .ecosystem-viz-bg-text {
+    font-size: clamp(0.9rem, 5vmin, 2rem);
+    letter-spacing: 0.04em;
+    width: 96%;
+    max-width: 96vw;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+    opacity: 0.5;
+  }
+}
+
+.ecosystem-viz-container {
+  position: relative;
+  width: min(100vw, 100vh);
+  height: min(100vw, 100vh);
+  max-width: 100vw;
+  max-height: 100vh;
+  flex-shrink: 0;
+  z-index: 1;
+  margin: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ecosystem-viz-orbits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  transform-origin: center center;
+}
+
+.ecosystem-viz-orbit-circle {
+  fill: none;
+  stroke: rgba(139, 92, 246, 0.18);
+  stroke-width: 0.8;
+  stroke-dasharray: 4, 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.3));
+}
+
+@media (min-width: 768px) {
+  .ecosystem-viz-orbit-circle {
+    stroke: rgba(139, 92, 246, 0.25);
+    stroke-width: 1.2;
+    stroke-dasharray: 4, 4;
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.5));
+  }
+}
+
+.ecosystem-viz-orbit-group {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: ecosystem-viz-orbit-rotate linear infinite;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+@keyframes ecosystem-viz-orbit-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ecosystem-viz-dot {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+  cursor: default;
+  transform-origin: center center;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.ecosystem-viz-dot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+  background: transparent !important;
+  padding: 0;
+  display: block;
+  mix-blend-mode: normal;
+  filter: none;
+}
+
+.ecosystem-viz-dot-fallback {
+  width: 100%;
+  height: 100%;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  color: rgba(139, 92, 246, 0.6);
+}
+
+.ecosystem-viz-dot:hover {
+  transform: translate(-50%, -50%) scale(1.12);
+  z-index: 11;
+}
+
+.ecosystem-viz-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.ecosystem-viz-logo-wrap {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.7)) drop-shadow(0 0 35px rgba(139, 92, 246, 0.4));
+  animation: ecosystem-logo-glow 3s ease-in-out infinite;
+  cursor: pointer;
+  transition: transform 0.3s ease, filter 0.3s ease;
+  pointer-events: auto;
+}
+
+.ecosystem-viz-logo-wrap:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 25px rgba(139, 92, 246, 0.9)) drop-shadow(0 0 45px rgba(139, 92, 246, 0.6));
+}
+
+@keyframes ecosystem-logo-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.7)) drop-shadow(0 0 50px rgba(139, 92, 246, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px rgba(139, 92, 246, 0.9)) drop-shadow(0 0 70px rgba(139, 92, 246, 0.6));
+  }
+}
+
+.ecosystem-viz-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ecosystem-viz-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ecosystem-viz-loading-logo {
+  width: 64px;
+  height: 64px;
+  opacity: 0.7;
+  animation: ecosystem-pulse 2s ease-in-out infinite;
+}
+
+.ecosystem-viz-loading p {
+  color: var(--text-secondary, rgba(229, 231, 235, 0.7));
+  font-size: 0.9rem;
+}
+
+@keyframes ecosystem-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* Tooltip - project name on hover */
+.ecosystem-viz-tooltip {
+  position: fixed;
+  z-index: 999;
+  pointer-events: none;
+  animation: ecosystem-tooltip-fade 0.2s ease-out;
+}
+
+@keyframes ecosystem-tooltip-fade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) translateY(0);
+  }
+}
+
+.ecosystem-viz-tooltip-content {
+  background: rgba(10, 10, 15, 0.95);
+  border: 1.5px solid rgba(139, 92, 246, 0.5);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3),
+              0 0 30px rgba(139, 92, 246, 0.15),
+              inset 0 0 10px rgba(139, 92, 246, 0.1);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ecosystem-viz-tooltip-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(229, 231, 235, 0.95);
+  background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ecosystem-viz-tooltip-arrow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(139, 92, 246, 0.5);
+}
+
+.ecosystem-viz-tooltip-arrow::before {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid rgba(10, 10, 15, 0.95);
+}
+
+@media (max-width: 768px) {
+  .ecosystem-viz-page {
+    padding: 8px 0;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ecosystem-viz-container {
+    width: min(calc(100vw - 16px), calc(100dvh - 44px - 16px));
+    height: min(calc(100vw - 16px), calc(100dvh - 44px - 16px));
+    max-width: calc(100% - 16px);
+    max-height: calc(100dvh - 44px - 16px);
+    overflow: hidden;
+  }
+  .ecosystem-viz-bg-text {
+    display: none;
+  }
+  .ecosystem-viz-logo-wrap {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ecosystem-viz-page {
+    min-height: 100dvh;
+  }
+  .ecosystem-viz-container {
+    max-height: 100dvh;
+  }
+  .ecosystem-viz-dot {
+    width: 28px;
+    height: 28px;
+  }
+  .ecosystem-viz-logo-wrap {
+    width: 50px;
+    height: 50px;
+  }
+  .ecosystem-viz-tooltip-content {
+    max-width: min(85vw, 260px);
+    font-size: 0.85rem;
+    padding: 10px 12px;
+  }
+}
+
+/* Mobile: 44px touch target, smaller visual to avoid overlap */
+.ecosystem-viz-dot-mobile {
+  min-width: 44px;
+  min-height: 44px;
+}
+.ecosystem-viz-dot-mobile img {
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px;
+  max-height: 22px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .ecosystem-viz-logo-wrap {
+    min-width: 48px;
+    min-height: 48px;
+  }
+}
