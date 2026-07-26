@@ -372,7 +372,7 @@ describe('hull numbers track the chain tip', () => {
         worst = Math.max(worst, tip - newestBerthed)
       }
     }
-    expect(worst).toBeLessThanOrEqual(7)
+    expect(worst).toBeLessThanOrEqual(5)
     engine.stop()
   })
 })

@@ -61,15 +61,15 @@ const FLEET_SPEED = 52
 const PASS_NEAR_SPEED = 88
 /** Distance before the berth over which an arrival angles in to the quay. */
 const TURN_IN = 160
-const DEPART_ACCEL = 60
-const DEPART_SPEED_MAX = 110
+const DEPART_ACCEL = 90
+const DEPART_SPEED_MAX = 130
 /**
  * Horizontal run a departing ship takes to settle onto its exit lane.
  * Long on purpose — the peel-away is part of the on-screen life of the hull.
  */
 const DEPART_RUN = 100
 /** Gangplank run-out and haul-in — boarding waits until this finishes. */
-const PLANK_SECONDS = 0.22
+const PLANK_SECONDS = 0.18
 /**
  * Clear water (buffer px) an inbound keeps behind a ship still on the berth.
  * Relief idles on the fairway instead of ramming the moored hull.
@@ -82,14 +82,14 @@ const BERTH_WAIT_GAP = 18
 const MIN_ALONGSIDE = 9
 const MIN_DWELL = 0.62
 /** After seal, wait this long for any last leaps before casting off. */
-const STRAGGLER_GRACE = 0.2
+const STRAGGLER_GRACE = 0.15
 /**
  * Leap interval while moored. A deck of ~8 seats fills in under a third of a
  * second — matching a block that arrives before the previous one has left.
  */
-const BOARD_INTERVAL = 0.03
+const BOARD_INTERVAL = 0.02
 /** Arc length per second along a leap path (quay → seat). */
-const LEAP_SPEED = 240
+const LEAP_SPEED = 300
 /**
  * Mempool life on the quay. Soldiers wait for their block; they only walk off
  * when the Odyssey truly has nothing for them.
@@ -106,10 +106,10 @@ const ABOARD_FADE = 0.22
 const NEAR_PLANK = 52
 /**
  * How far down the quay a called soldier will march to reach its plank.
- * Bounded by what is walkable inside a long dwell (LEAP_SPEED x ~1.6s), so a
- * marcher can never hold a berth past the unconditional seal.
+ * Walk + leap tops out near ~1.1s at LEAP_SPEED; the seal honestly waits for
+ * marchers (stillLeaping), so this bound is what caps a berth's worst dwell.
  */
-const MARCH_REACH = 320
+const MARCH_REACH = 260
 /** Standing room on the after deck: four ranks of four. */
 const DECK_MAX = 20
 
@@ -328,6 +328,18 @@ export function createShipEngine(canvas) {
       if (held && (held.dock === 'moored' || held.dock === 'casting')) return true
     }
     return false
+  }
+
+  /**
+   * Mandatory alongside time shrinks under backlog. An idle harbour keeps the
+   * full ceremonial dwell; a harbour that is falling behind the chain turns
+   * hulls around as fast as the muster honestly allows.
+   */
+  function effectiveDwell() {
+    const n = blockQueue.length
+    if (n >= 3) return 0.30
+    if (n >= 1) return 0.45
+    return MIN_DWELL
   }
 
   /** Release spacing tightens under backlog so the tip of the chain is not orphaned. */
@@ -820,7 +832,7 @@ export function createShipEngine(canvas) {
         const blocking = holder && (
           holder.dock === 'moored' ||
           holder.dock === 'casting' ||
-          (holder.dock === 'away' && holder.x > target - 10)
+          (holder.dock === 'away' && holder.x > target - 40)
         )
         let goalX = target
         if (blocking) {
@@ -830,9 +842,12 @@ export function createShipEngine(canvas) {
         const gap = s.x - goalX
         if (gap > 0.5) {
           const maxSp = blocking
-            ? Math.min(APPROACH_SPEED, 110)
+            ? Math.min(APPROACH_SPEED, 140)
             : APPROACH_SPEED
-          s.speed = Math.max(36, Math.min(maxSp, gap * 2.0))
+          // Snappy final glide: gain 6 with a 90px/s floor settles the last
+          // 150px in ~0.4s. The old gain of 2 took ~1.9s — at 300ms blocks
+          // that single ease-in was two-thirds of the whole berth budget.
+          s.speed = Math.max(90, Math.min(maxSp, gap * 6.0))
           s.x -= s.speed * dt
           if (s.x < goalX) s.x = goalX
         } else {
@@ -847,9 +862,16 @@ export function createShipEngine(canvas) {
         } else {
           // Come up from the back of the sea into the berth. Smoothstep, so
           // the hull banks in and settles instead of riding a straight ramp.
+          // Rate-limited: on the frame `blocking` flips false the hold-water
+          // y sits ~37px off the curve, and a direct assignment teleported
+          // the hull. 380px/s tracks the steepest curve segment at full
+          // approach speed and folds the handoff into a ~0.1s bank.
           const kr = Math.max(0, Math.min(1, (TURN_IN - (s.x - target)) / TURN_IN))
           const k = kr * kr * (3 - 2 * kr)
-          s.y = FLEET_Y + (dockY - FLEET_Y) * k
+          const curveY = FLEET_Y + (dockY - FLEET_Y) * k
+          const bankStep = 380 * dt
+          const dy = curveY - s.y
+          s.y += Math.abs(dy) <= bankStep ? dy : Math.sign(dy) * bankStep
         }
 
         if (!blocking && s.x <= target + 0.5) {
@@ -902,8 +924,8 @@ export function createShipEngine(canvas) {
           // do not rush the front ship just to free a slot for a trio.
           const reliefWaiting = !!slotInbound(s.slot)
           const apronFull = alongsideCount() >= MIN_ALONGSIDE
-          const dwellDone = elapsed - s.mooredAt >= MIN_DWELL + PLANK_SECONDS
-          const longDwell = elapsed - s.mooredAt >= MIN_DWELL * 2.8 + PLANK_SECONDS
+          const dwellDone = elapsed - s.mooredAt >= effectiveDwell() + PLANK_SECONDS
+          const longDwell = elapsed - s.mooredAt >= effectiveDwell() * 2.8 + PLANK_SECONDS
           if (s.passengers.length >= s.load && !stillLeaping && (apronFull || dwellDone)) seal(s)
           else if (s.plank >= 1 && !stillLeaping &&
               ((apronFull && dwellDone && (reliefWaiting || elapsed - s.lastBoardAt >= BOARD_INTERVAL * 3))
@@ -918,7 +940,7 @@ export function createShipEngine(canvas) {
         if (s.plank <= 0) {
           s.dock = 'away'
           s.rowing = true
-          s.speed = 28
+          s.speed = 60
           // Fan across depth lanes — only some hulls take the foreground.
           s.exitY = LANES[s.slot % LANES.length]
         }
