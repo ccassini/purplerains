@@ -87,7 +87,8 @@ export default function AgoraWorld3DPage() {
   const ARC_TICK_MS = 400
   const UI_FEED_TICK_MS = 180
   const ARC_BATCH_LIMIT = 24
-  const TRANSFER_MULTIPLIER = 18
+  // Live-data mandate: one real transfer spawns exactly one arc.
+  const TRANSFER_MULTIPLIER = 1
   const MAX_ARCS_PER_SOURCE_PER_TICK = 3
   const MAX_UNIQUE_LANES_PER_TX = 5
   const FEED_APPEND_PER_TICK = 6

@@ -246,61 +246,6 @@ function BlockchainVizPage() {
     }
   }, [])
 
-  // Handle header show/hide on hover (only on network page)
-  // MUST be before early returns to maintain hook order
-  useEffect(() => {
-    let hideTimeout = null
-    let retryTimeout = null
-    let cleanup = null
-
-    const setupHeader = () => {
-      const header = document.querySelector('.app-header.header-hover-hidden')
-      if (!header) {
-        // Retry after a short delay if header not found
-        retryTimeout = setTimeout(setupHeader, 100)
-        return
-      }
-
-      const handleMouseMove = () => {
-        // Mouse moved - show header and reset timer
-        if (hideTimeout) {
-          clearTimeout(hideTimeout)
-          hideTimeout = null
-        }
-        
-        header.classList.add('header-show')
-        header.classList.remove('header-hide')
-        
-        // Set timer to hide header after 2 seconds of no movement
-        hideTimeout = setTimeout(() => {
-          header.classList.add('header-hide')
-          header.classList.remove('header-show')
-          hideTimeout = null
-        }, 2000) // 2 seconds of no movement
-      }
-
-      // Initially hide header
-      header.classList.add('header-hide')
-      header.classList.remove('header-show')
-
-      document.addEventListener('mousemove', handleMouseMove)
-
-      cleanup = () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        if (hideTimeout) clearTimeout(hideTimeout)
-      }
-    }
-
-    setupHeader()
-
-    return () => {
-      if (retryTimeout) clearTimeout(retryTimeout)
-      if (cleanup) cleanup()
-    }
-  }, [])
-
-  logger.log('Rendering BlockchainVizPage, loading:', loading, 'validators:', validators?.length)
-
   return (
     <div className="blockchain-viz-page" style={{ background: '#0a0a0f' }}>
       <div className="blockchain-viz-bg-text" aria-hidden="true">

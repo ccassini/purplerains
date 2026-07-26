@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { speciesFor, separatePod, TIER_USD, SEA_LIFE_SIZE, SPECIES } from '../seaLife'
-import { normalizeInflow, normalizeLifiTransfer, normalizeWormholeOp, freshInflows, chainName, bridgeName, MONAD_CHAIN_ID, WORMHOLE_MONAD } from '../../utils/bridgeApi'
+import { normalizeInflow, normalizeLifiTransfer, normalizeWormholeOp, freshInflows, stageFreshInflows, mergeInflows, toUnixSeconds, chainName, bridgeName, MONAD_CHAIN_ID, WORMHOLE_MONAD } from '../../utils/bridgeApi'
 
 describe('speciesFor', () => {
   test('splits the pod at the configured thresholds', () => {
@@ -169,11 +169,34 @@ const lifiTransfer = (over = {}) => ({
     token: { symbol: 'MON' },
     amountUSD: over.usd ?? '498.30',
     txHash: over.txHash ?? '0xdest',
-    timestamp: 1785016623,
+    timestamp: over.at ?? 1785016623,
   },
 })
 
+describe('toUnixSeconds', () => {
+  test('passes plausible seconds through, flooring fractions', () => {
+    expect(toUnixSeconds(1785016623)).toBe(1785016623)
+    expect(toUnixSeconds(1785016623.9)).toBe(1785016623)
+  })
+
+  test('folds an obviously-milliseconds value down to seconds', () => {
+    expect(toUnixSeconds(1785016623000)).toBe(1785016623)
+  })
+
+  test('junk reads as 0, never NaN — an unreadable time is never staged', () => {
+    expect(toUnixSeconds(NaN)).toBe(0)
+    expect(toUnixSeconds(-5)).toBe(0)
+    expect(toUnixSeconds(undefined)).toBe(0)
+    expect(toUnixSeconds('nope')).toBe(0)
+  })
+})
+
 describe('normalizeLifiTransfer', () => {
+  test('clamps a milliseconds timestamp to seconds before the watermark sees it', () => {
+    const inflow = normalizeLifiTransfer(lifiTransfer({ at: 1785016623000 }))
+    expect(inflow.at).toBe(1785016623)
+  })
+
   test('reads an aggregator transfer and names the underlying bridge', () => {
     expect(normalizeLifiTransfer(lifiTransfer())).toMatchObject({
       id: '0xdest',
@@ -263,6 +286,49 @@ describe('normalizeWormholeOp', () => {
   })
 })
 
+describe('mergeInflows — one physical transfer, one animal', () => {
+  const wormAt = Math.floor(Date.parse('2026-07-25T16:18:42Z') / 1000)
+  // wormholeOp() reports Arbitrum (Wormhole 23); 42161 is Arbitrum in EVM ids.
+  const twin = (over = {}) => lifiTransfer({
+    fromChainId: 42161,
+    tool: 'mayan',
+    usd: over.usd ?? '9.99',
+    at: over.at ?? wormAt + 30,
+  })
+
+  test('drops a Wormhole op matching an EVM-feed entry within tolerance', () => {
+    const merged = mergeInflows({ transfers: [twin()] }, null, { operations: [wormholeOp()] })
+    expect(merged).toHaveLength(1)
+    // The tx-hash-keyed entry with the specific tool name wins.
+    expect(merged[0].bridge).toBe('Mayan')
+  })
+
+  test('keeps a Wormhole op whose USD is outside tolerance', () => {
+    const merged = mergeInflows(
+      { transfers: [twin({ usd: '250.00' })] },
+      null,
+      { operations: [wormholeOp()] },
+    )
+    expect(merged).toHaveLength(2)
+  })
+
+  test('keeps a Wormhole op whose settlement time is outside tolerance', () => {
+    const merged = mergeInflows(
+      { transfers: [twin({ at: wormAt + 3600 })] },
+      null,
+      { operations: [wormholeOp()] },
+    )
+    expect(merged).toHaveLength(2)
+  })
+
+  test('two distinct Wormhole ops never suppress each other', () => {
+    const merged = mergeInflows(null, null, {
+      operations: [wormholeOp(), wormholeOp({ id: '47/000def/13' })],
+    })
+    expect(merged).toHaveLength(2)
+  })
+})
+
 describe('freshInflows — each transfer crosses exactly once', () => {
   const inflow = (id, at) => ({ id, at, usd: 10 })
 
@@ -312,5 +378,35 @@ describe('freshInflows — each transfer crosses exactly once', () => {
     const live = freshInflows([inflow('c', openedAt + 5), ...history], next)
     expect(live.fresh.map((i) => i.id)).toEqual(['c'])
     expect(live.next).toBe(openedAt + 5)
+  })
+})
+
+describe('stageFreshInflows — the watermark only passes what actually staged', () => {
+  const inflow = (id, at) => ({ id, at, usd: 10 })
+
+  test('walks oldest first and advances past every staged transfer', () => {
+    const order = []
+    const next = stageFreshInflows(
+      [inflow('b', 200), inflow('a', 100)],
+      50,
+      (i) => { order.push(i.id); return true },
+    )
+    expect(order).toEqual(['a', 'b'])
+    expect(next).toBe(200)
+  })
+
+  test('a declined transfer is NOT advanced past — a full pod cannot eat it', () => {
+    const batch = [inflow('c', 300), inflow('b', 200), inflow('a', 100)]
+    const next = stageFreshInflows(batch, 50, (i) => i.id === 'a')
+    expect(next).toBe(100)
+    // Next poll: the declined transfers are still strictly newer than the
+    // watermark, so they come back as fresh and get retried.
+    const { fresh } = freshInflows(batch, next)
+    expect(fresh.map((i) => i.id)).toEqual(['c', 'b'])
+  })
+
+  test('an empty batch leaves the watermark untouched', () => {
+    expect(stageFreshInflows([], 123, () => true)).toBe(123)
+    expect(stageFreshInflows(undefined, 123, () => true)).toBe(123)
   })
 })

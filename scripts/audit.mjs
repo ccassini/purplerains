@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 /**
  * Repo audit — derives every finding from the CURRENT working tree.
  *
@@ -87,9 +88,12 @@ function cssRules(rel) {
     add('FAIL', 'lint', 'ESLint config does not load — `npm run lint` is a no-op',
       cfg.split('\n').find((l) => /config/i.test(l)) || '')
   } else {
-    const raw = sh('node node_modules/eslint/bin/eslint.js . --ext js,jsx -f json 2>/dev/null || true')
+    // Mirror `npm run lint` exactly (same flags), so a PASS here means the
+    // real gate passes too — including unused eslint-disable directives, which
+    // surface in the JSON output as severity-2 messages with a null ruleId.
+    const raw = sh('node node_modules/eslint/bin/eslint.js . --ext js,jsx --report-unused-disable-directives -f json 2>/dev/null || true')
     let results = null
-    try { results = JSON.parse(raw) } catch { /* eslint produced no parsable output */ }
+    try { results = JSON.parse(raw) } catch { /* no parsable output from the linter */ }
     if (!results) {
       add('WARN', 'lint', 'Could not read ESLint JSON output')
     } else {
@@ -99,7 +103,8 @@ function cssRules(rel) {
         for (const m of f.messages) {
           if (m.severity === 2) {
             errors++
-            const k = m.ruleId || 'parse-error'
+            const k = m.ruleId
+              || (/unused eslint-disable/i.test(m.message || '') ? 'unused-disable-directive' : 'parse-error')
             if (!byRule.has(k)) byRule.set(k, [])
             byRule.get(k).push(`${f.filePath.replace(ROOT, '')}:${m.line}`)
           } else warnings++
@@ -111,9 +116,10 @@ function cssRules(rel) {
           .map(([rule, at]) => `${rule} x${at.length} (${at[0]}${at.length > 1 ? ', …' : ''})`)
         add('FAIL', 'lint', `ESLint reports ${errors} error(s)`, top.join(' · '))
       }
-      // The lint script runs with --max-warnings 0, so warnings block it too.
+      // Warnings do NOT fail `npm run lint` (no --max-warnings flag): they are
+      // tracked debt, surfaced here so the count is visible without gating CI.
       if (warnings) {
-        add('WARN', 'lint', `ESLint reports ${warnings} warning(s) — \`npm run lint\` uses --max-warnings 0, so this fails CI`)
+        add('WARN', 'lint', `ESLint reports ${warnings} warning(s) — tracked debt, does not fail \`npm run lint\``)
       }
     }
   }

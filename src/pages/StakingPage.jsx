@@ -147,7 +147,6 @@ export default function StakingPage() {
       // parallel-ish scanning with small batches to avoid rate limits
       for (let start = 0; start < slots.length; start += 4) {
         const batch = slots.slice(start, start + 4)
-        // eslint-disable-next-line no-await-in-loop
         const results = await Promise.all(batch.map(async (i) => {
           const wrHex = await ethCall(publicClient, encodeGetWithdrawalRequestCalldata(selectedId, address, i))
           if (!wrHex || wrHex === '0x') return null

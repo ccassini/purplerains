@@ -8,7 +8,7 @@
  * crowding into a single line.
  */
 import {
-  PAL, BASE_H, surface, bandGradient, drawPixelText, measurePixelText, formatHullLabel,
+  PAL, BASE_H, surface, bandGradient, drawPixelText, measurePixelText, formatHullTail,
 } from './pixel'
 import {
   getSprite,
@@ -514,10 +514,48 @@ function drawOars(ctx, ship, x, y, t) {
   }
 }
 
+/**
+ * Pre-rendered hull nameboards, keyed by the 4-digit block tail. Boards repeat
+ * only every 10,000 blocks, so a small ring comfortably covers every hull on
+ * screen; the oldest board is evicted once the ring fills. One drawImage per
+ * hull replaces ~85 per-frame glyph fills.
+ */
+const LABEL_RING_MAX = 32
+const labelRing = new Map()
+
+/** Board margin around the text: 2px each side, text sits at (2, 2). */
+const LABEL_PAD = 2
+const LABEL_BOARD_H = 9
+
+function hullLabelSprite(label) {
+  const cached = labelRing.get(label)
+  if (cached) return cached
+  const tw = measurePixelText(label)
+  const { c, ctx } = surface(tw + LABEL_PAD * 2, LABEL_BOARD_H)
+  // A hull nameboard: near-black ground with a lit upper edge, so it reads
+  // as a painted plank rather than a hole cut in the strake.
+  R(ctx, 0, 0, tw + LABEL_PAD * 2, LABEL_BOARD_H, PAL.black)
+  R(ctx, 0, 0, tw + LABEL_PAD * 2, 1, PAL.hullMid)
+  drawPixelText(ctx, label, LABEL_PAD, LABEL_PAD, PAL.linen)
+  if (labelRing.size >= LABEL_RING_MAX) {
+    labelRing.delete(labelRing.keys().next().value)
+  }
+  labelRing.set(label, c)
+  return c
+}
+
+/** Reused depth-sort buffer — no per-frame array allocation. */
+const shipsByDepth = []
+
 export function drawShips(ctx, ships, t) {
   // Nearer water last: a ship running down the fairway to the far berth has to
-  // pass in front of the ones already alongside, not through them.
-  for (const s of [...ships].sort((a, b) => a.y - b.y)) {
+  // pass in front of the ones already alongside, not through them. Sorted into
+  // a reused module buffer so the per-frame [...ships] copy never allocates.
+  shipsByDepth.length = 0
+  for (const s of ships) shipsByDepth.push(s)
+  shipsByDepth.sort((a, b) => a.y - b.y)
+
+  for (const s of shipsByDepth) {
     const sprite = shipSprite(s.traits)
     const bob = s.rowing ? Math.round(Math.sin(t * 1.1 + s.phase) * 1) : 0
     const x = Math.round(s.x)
@@ -539,21 +577,17 @@ export function drawShips(ctx, ships, t) {
     }
     ctx.restore()
 
-    // Full block height on the strake — drawn outside the ship transform so
-    // the 3x5 font stays snapped to whole buffer pixels (no fractional mush).
+    // The block's 4-digit tail on the strake — blitted outside the ship
+    // transform so the 3x5 font stays snapped to whole buffer pixels. The
+    // full height is one glance away in the HUD.
     if (s.number) {
       const s2 = sc * SHIP_SCALE
-      const label = formatHullLabel(s.number)
-      const tw = measurePixelText(label)
+      const board = hullLabelSprite(formatHullTail(s.number))
       // Native (SHIP_NATIVE_W/2, DECK_Y + 2) projected back into buffer space.
       const cx = Math.round(x + SHIP_W / 2)
       const ly = Math.round(y + SHIP_H - (SHIP_NATIVE_H - (DECK_Y + 2)) * s2)
-      const lx = cx - Math.round(tw / 2)
-      // A hull nameboard: near-black ground with a lit upper edge, so it reads
-      // as a painted plank rather than a hole cut in the strake.
-      R(ctx, lx - 2, ly - 2, tw + 4, 9, PAL.black)
-      R(ctx, lx - 2, ly - 2, tw + 4, 1, PAL.hullMid)
-      drawPixelText(ctx, label, lx, ly, PAL.linen)
+      const lx = cx - Math.round((board.width - LABEL_PAD * 2) / 2)
+      ctx.drawImage(board, lx - LABEL_PAD, ly - LABEL_PAD)
     }
   }
 }

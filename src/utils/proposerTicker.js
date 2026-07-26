@@ -57,7 +57,6 @@ export function updateNowProposer(refs, next) {
   if (!same) {
     root.classList.remove('is-pop')
     // Force restart CSS animation without layout thrash
-    // eslint-disable-next-line no-unused-expressions
     void root.offsetWidth
     root.classList.add('is-pop')
     window.setTimeout(() => root.classList.remove('is-pop'), 380)

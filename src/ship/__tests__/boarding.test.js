@@ -244,6 +244,52 @@ describe('boarding under the law of the manifest', () => {
   })
 })
 
+describe('the pass lane settles its own manifests', () => {
+  test('quay soldiers whose tx seals into a pass-through hull are dismissed', async () => {
+    const engine = await makeEngine()
+    const hashes = Array.from({ length: 8 }, (_, i) => `0xpass${i}`)
+    for (const hash of hashes) engine.pushMon({ hash, category: 'transfer', value: 1, gasPrice: 50 })
+    pump(0.5)
+    expect(engine.getSnapshot().stats.queued).toBe(8)
+
+    // Nine stranger blocks claim every berth as inbounds (none can moor for
+    // >2s of approach run), so the tenth block must pass through open water.
+    for (let i = 0; i < 9; i++) {
+      engine.pushVessel(block({ number: 6000 + i, transactionCount: 20 }))
+    }
+    pump(0.8)
+    engine.pushVessel(block({
+      number: 6009,
+      transactionCount: 12,
+      recruits: hashes.map((h) => ({ hash: h, value: 1, gasPrice: 50, category: 'transfer' })),
+    }))
+    pump(1)
+
+    // Their transactions visibly sailed past on the pass lane: the soldiers
+    // walk immediately — long before the 12s quay life — and count ashore.
+    const st = engine.getSnapshot().stats
+    expect(st.queued).toBe(0)
+    expect(st.ashore).toBeGreaterThanOrEqual(8)
+    engine.stop()
+  })
+})
+
+describe('the pod declines honestly when full', () => {
+  test('a full pod refuses without eating the id — it can stage later', async () => {
+    const engine = await makeEngine()
+    // LIFE_MAX creatures fill the water...
+    for (let i = 0; i < 14; i++) {
+      expect(engine.pushInflow({ id: `0xlife${i}`, usd: 10, at: 100 + i })).toBe(true)
+    }
+    // ...so the next transfer is declined, NOT swallowed.
+    expect(engine.pushInflow({ id: '0xlate', usd: 10, at: 200 })).toBe(false)
+    // Once the pod has swum off, the same id must still be stageable.
+    pump(48)
+    expect(engine.pushInflow({ id: '0xlate', usd: 10, at: 200 })).toBe(true)
+    engine.stop()
+  })
+})
+
 describe('ships keep pace with the live chain', () => {
   test('at 3.3 blocks/s the queue rides shallow and every block stages', async () => {
     const engine = await makeEngine()

@@ -114,7 +114,9 @@
 .hb-board,
 .hb-card,
 .hb-tool,
-.hb-panel {
+.hb-panel,
+.hb-dock,
+.hb-guide {
   position: relative;
   border: var(--rule) solid var(--hb-frame);
   background-color: var(--hb-panel);
@@ -269,9 +271,14 @@
   justify-content: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   color: var(--hb-dim);
   cursor: pointer;
   text-decoration: none;
+  /* Buttons do not inherit the face; the legend toggle's `?` must match. */
+  font-family: var(--hb-display);
+  font-size: 17px;
+  line-height: 1;
   transition: color 0.12s steps(2), border-color 0.12s steps(2);
 }
 .hb-tool:hover {
@@ -599,11 +606,20 @@
     width: auto;
   }
   .hb-panels { display: none; }
+  .hb-dock { display: none; }
+  .hb-guide {
+    top: auto;
+    bottom: 78px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
   .hb-manifest-item { padding: 0 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hb-card,
+  .hb-guide,
   .hb-manifest-item { animation: none; }
   .hb-net.is-live::before,
   .hb-net.is-wait::before { animation: none; }
@@ -629,11 +645,148 @@
 }
 .hb-burn i { font-style: normal; font-size: 11px; color: var(--hb-quiet); }
 
+/* ── the quay's ledger: berth gauges + tally, bottom-left ────────────────
+   Consumes the snapshot fields the engine always computed: berths[] with
+   boarded/load on the shared deckMax scale, and queued/sailed/skipped. */
+
+.hb-dock {
+  position: absolute;
+  left: 12px;
+  bottom: 46px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: 8px 10px 9px;
+  contain: paint;
+}
+
+.hb-berths {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+.hb-berth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 22px;
+}
+/* The gauge well: a carved recess, hard edges only. */
+.hb-berth-bar {
+  position: relative;
+  width: 100%;
+  height: 34px;
+  background: var(--hb-recess);
+  box-shadow:
+    inset 1px 1px 0 0 rgba(4, 2, 11, 0.9),
+    inset -1px -1px 0 0 rgba(244, 241, 255, 0.08);
+  overflow: hidden;
+}
+/* Bars scale by transform only — no height animation, no layout churn. */
+.hb-berth-bar i {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  transform-origin: bottom;
+}
+/* What the sealed block musters (its real load)… */
+.hb-berth-load {
+  left: 2px;
+  right: 2px;
+  background: var(--hb-demand);
+}
+/* …and how much of that muster is aboard so far. */
+.hb-berth-boarded {
+  left: 6px;
+  right: 6px;
+  background: var(--hb-capacity);
+}
+/* A hull still running in reads dimmer than one lying alongside. */
+.hb-berth.is-approach .hb-berth-bar i { opacity: 0.55; }
+.hb-berth.is-idle .hb-berth-tx { color: var(--hb-faint); }
+
 .hb-berth-tx {
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--hb-quiet);
   font-variant-numeric: tabular-nums;
+}
+
+.hb-tally {
+  display: flex;
+  gap: var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: var(--rule) solid var(--hb-edge-dim);
+}
+.hb-tally-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.hb-tally-item b {
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-ink);
+}
+.hb-tally-item i {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hb-faint);
+}
+.hb-tally-item.is-sailed b { color: var(--hb-sailed); }
+.hb-tally-item.is-unseen b { color: var(--hb-quiet); }
+
+/* ── the legend: crest / blazon / torch / bench / whale, taught in place ── */
+
+.hb-guide {
+  position: absolute;
+  top: 58px;
+  left: 12px;
+  z-index: 7;
+  width: min(324px, calc(100vw - 24px));
+  padding: 10px 12px 11px;
+  animation: hb-pop 0.14s steps(3, end) both;
+}
+.hb-guide h3 {
+  margin: 0 0 var(--sp-3);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--hb-dim);
+}
+.hb-guide ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.hb-guide li {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: var(--sp-4);
+  align-items: baseline;
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--hb-edge);
+}
+.hb-guide b {
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hb-gold);
+}
+.hb-guide span {
+  font-family: var(--hb-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--hb-dim);
 }
 
 /* Burn cells in the top course: the offering reads in ember red. */

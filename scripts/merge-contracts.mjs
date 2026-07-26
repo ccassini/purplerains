@@ -9,10 +9,13 @@
  * entries above it survive and re-running is idempotent. Addresses already
  * present in the file are skipped: the curated set wins over the scrape.
  *
- * Usage: node scripts/merge-contracts.mjs harvest.json
+ * Usage: node scripts/merge-contracts.mjs harvest.json [logo-overrides.json]
+ *
+ * Logo overrides default to scripts/data/mv-logos.json when present; without
+ * an override file, only exact normalized filename matches attach a logo.
  */
 /* eslint-env node */
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 
 const TARGET = 'src/utils/monadContracts.js'
 const BEGIN = '  /* BEGIN GENERATED: monadvision harvest */'
@@ -39,11 +42,18 @@ const existing = new Set(
 )
 
 /** Exact logo overrides harvested from MonadVision, keyed by project name. */
+const DEFAULT_OVERRIDES_PATH = 'scripts/data/mv-logos.json'
+const overridesPath =
+  process.argv[3] ?? (existsSync(DEFAULT_OVERRIDES_PATH) ? DEFAULT_OVERRIDES_PATH : null)
 let overrides = {}
-try {
-  overrides = JSON.parse(readFileSync(
-    '/private/tmp/claude-501/-Users-cassini-Desktop-PURPLE-RAIN/harvest/logos.json', 'utf8'))
-} catch { /* no override file: fall back to filename matching */ }
+if (overridesPath) {
+  try {
+    overrides = JSON.parse(readFileSync(overridesPath, 'utf8'))
+  } catch (error) {
+    console.error(`failed to read logo overrides ${overridesPath}: ${error.message}`)
+    process.exit(1)
+  }
+}
 
 /** Ecosystem logo files, matched case- and punctuation-insensitively. */
 const logos = readdirSync('public/ecosystem')
@@ -51,10 +61,9 @@ const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 function logoFor(project) {
   if (overrides[project]) return `'${overrides[project]}'`
   const want = normalize(project)
-  const hit = logos.find((f) => {
-    const base = normalize(f.replace(/\.[a-z0-9]+$/i, ''))
-    return base === want || base.startsWith(want) || want.startsWith(base)
-  })
+  // Exact normalized equality only: startsWith fuzzy matching could silently
+  // attach another project's logo (e.g. "Fly" vs "Flywheel").
+  const hit = logos.find((f) => normalize(f.replace(/\.[a-z0-9]+$/i, '')) === want)
   return hit ? `\`\${ECO}${hit}\`` : 'null'
 }
 

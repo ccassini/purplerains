@@ -32,8 +32,6 @@ const MAX_QUEUE = 96
  */
 const INTAKE_PER_SEC = 36
 const INTAKE_BURST = 64
-/** Blocks waiting for a berth — prefer the apron over open-water pass. */
-const PENDING_BLOCKS_MAX = 36
 /**
  * Queue depth beyond which the oldest blocks are folded straight into the
  * sailed count. 24 blocks is ~8 seconds of live cadence — the most backlog
@@ -137,8 +135,6 @@ export function createShipEngine(canvas) {
    * @type {Array<object>}
    */
   let blockQueue = []
-  /** @type {Array<object>} blocks waiting for a free pass lane */
-  let pending = []
   let lastReleaseAt = -999
   const byHash = new Map()
 
@@ -344,25 +340,37 @@ export function createShipEngine(canvas) {
     return BLOCK_INTERVAL
   }
 
+  /**
+   * The block sealed without a berth: any of its soldiers still mustered on
+   * the quay watched their transaction sail past on the pass lane. Dismiss
+   * them exactly as seal() does — a real mempool drops a sealed transaction.
+   */
+  function dismissSealedCrew(ship) {
+    for (const q of hoplites) {
+      if (q.state === 'queued' && ship.manifest.has(q.hash)) { q.state = 'leaving'; ashore++ }
+    }
+  }
+
   function launchPass(block) {
+    let lane = null
     for (let j = 0; j < LANES.length; j++) {
-      const lane = LANES[(laneCursor + j) % LANES.length]
-      const tail = laneTail(lane)
+      const candidate = LANES[(laneCursor + j) % LANES.length]
+      const tail = laneTail(candidate)
       if (tail && tail.x > surface.width - SHIP_W - LANE_GAP) continue
       laneCursor = (laneCursor + j + 1) % LANES.length
-      const ship = makeShip(block, lane, 'pass')
-      ship.x = offscreenEntryX()
-      ships.push(ship)
-      fillDeck(ship)
-      return true
+      lane = candidate
+      break
     }
-    // Lanes tight: still place the hull. Overlap beats stalling behind the tip.
-    const lane = LANES[laneCursor % LANES.length]
-    laneCursor = (laneCursor + 1) % LANES.length
+    if (lane == null) {
+      // Lanes tight: still place the hull. Overlap beats stalling behind the tip.
+      lane = LANES[laneCursor % LANES.length]
+      laneCursor = (laneCursor + 1) % LANES.length
+    }
     const ship = makeShip(block, lane, 'pass')
     ship.x = offscreenEntryX()
     ships.push(ship)
     fillDeck(ship)
+    dismissSealedCrew(ship)
     return true
   }
 
@@ -372,9 +380,6 @@ export function createShipEngine(canvas) {
    * otherwise pass through open water so ship spawn tracks the live tip.
    */
   function releaseNext() {
-    if (!blockQueue.length && pending.length) {
-      blockQueue.push(pending.shift())
-    }
     if (!blockQueue.length) return
 
     // Deep backlog: allow a short same-frame burst so a quiet tab / long dwell
@@ -655,9 +660,7 @@ export function createShipEngine(canvas) {
     fillDeck(ship)
     // The block is sealed: any of its soldiers still waiting missed the sailing.
     // A real mempool drops a sealed transaction — they walk, at chain rate.
-    for (const q of hoplites) {
-      if (q.state === 'queued' && ship.manifest.has(q.hash)) { q.state = 'leaving'; ashore++ }
-    }
+    dismissSealedCrew(ship)
     ship.boarding = false
     ship.sealedAt = elapsed
   }
@@ -674,12 +677,6 @@ export function createShipEngine(canvas) {
       if (!tail || s.x > tail.x) tail = s
     }
     return tail
-  }
-
-  /** Drain pass-lane pending whenever a lane is clear — at most one per frame. */
-  function launchPending() {
-    if (!pending.length) return
-    if (launchPass(pending[0])) pending.shift()
   }
 
   function seatPosition(ship, index) {
@@ -939,7 +936,6 @@ export function createShipEngine(canvas) {
   function update(dt) {
     intakeTokens = Math.min(INTAKE_BURST, intakeTokens + INTAKE_PER_SEC * dt)
     releaseNext()
-    launchPending()
     updateBerths(dt)
     updateMotes(dt)
     updateSeaLife(dt)
@@ -1107,7 +1103,7 @@ export function createShipEngine(canvas) {
     const focus = pinned || hovered
     return {
       stats: {
-        queueDepth: blockQueue.length + pending.length,
+        queueDepth: blockQueue.length,
         fastForwarded,
         burnedSession,
         burnedLast,
@@ -1188,7 +1184,8 @@ export function createShipEngine(canvas) {
           abilities: ABILITY_CARDS_BY_RANK[focus.rank] || ABILITY_CARDS_BY_RANK[0],
           whale: focus.traits.whale,
           priority: focus.traits.priority,
-          color: focus.traits.cloak,
+          // DOM-legible dye: the raw cloak hexes are near-black on the panel.
+          color: focus.traits.cloakSignal || focus.traits.cloak,
           pinned: pinned === focus,
         }
         : null,
@@ -1251,7 +1248,15 @@ export function createShipEngine(canvas) {
 
   function onPointerLeave() {
     pointer.inside = false
-    if (hovered) { hovered = null; emit() }
+    // Clear ALL hover focus, not just the hoplite: a lingering hoveredShip or
+    // hoveredLife kept its card stuck open after the cursor left the canvas.
+    if (hovered || hoveredShip || hoveredLife) {
+      hovered = null
+      hoveredShip = null
+      hoveredLife = null
+      canvas.style.cursor = 'default'
+      emit()
+    }
   }
 
   function onClick() {
@@ -1299,7 +1304,6 @@ export function createShipEngine(canvas) {
       ships = []
       berthShips = []
       blockQueue = []
-      pending = []
       lastReleaseAt = -999
       byHash.clear()
       seaLife = []

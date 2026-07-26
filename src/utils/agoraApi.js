@@ -532,7 +532,6 @@ async function fetchTransferLogsIncremental(ch, contract, rpc, blockWindow) {
 
   while (cursor <= latest && batches < MAX_LOG_BATCHES_PER_CHAIN) {
     const to = Math.min(cursor + maxRange, latest)
-    // eslint-disable-next-line no-await-in-loop
     const logs = await rpcCall(rpc, 'eth_getLogs', [{
       address: contract,
       fromBlock: `0x${cursor.toString(16)}`,

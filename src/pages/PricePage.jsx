@@ -9,12 +9,10 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
-import { AreaSeries, CandlestickSeries, ColorType, CrosshairMode, LineSeries, LineType, createChart } from 'lightweight-charts'
 import { siBinance, siCoinbase, siOkx } from 'simple-icons'
 import { formatUsdExact, formatUsdCompact } from '../utils/formatters'
 import {
   BINANCE_FSTREAM_WS,
-  CANDLE_STYLE,
   LINE_SMOOTH_ALPHA,
   LINE_TICK_MS,
   SNAKE_PAD_Y,
@@ -32,21 +30,10 @@ export default function PricePage() {
   const [symbol, setSymbol] = useState(null)
   const [lastPrice, setLastPrice] = useState(null)
   const [btcPrice, setBtcPrice] = useState(null)
-  const [candleIntervalMs] = useState(1000)
-  const [chartType] = useState('line') // 'candles' | 'line' — default line-only snake mode
   const [trades, setTrades] = useState([]) // newest first
-  const [candles, setCandles] = useState([]) // { t, o, h, l, c, v }
-  const candlesMax = 600 // 10 minutes @ 1s
   const lastPriceRef = useRef(null)
-  const currentCandleRef = useRef(null) // { bucket, o,h,l,c,v }
 
-  // TradingView-like candle chart (aggr style)
-  const chartContainerRef = useRef(null)
-  const chartRef = useRef(null)
-  const candleSeriesRef = useRef(null)
-  const lineGlowSeriesRef = useRef(null)
-  const lineHaloSeriesRef = useRef(null)
-  const lineSeriesRef = useRef(null)
+  // Canvas snake chart (line-only)
   const lineSmoothedRef = useRef(null)
   const lineHeadInnerRef = useRef(null)
   const lineHeadPriceRef = useRef(null)
@@ -59,12 +46,7 @@ export default function PricePage() {
   const snakeReadyRef = useRef(false)
   const snakeLogoImgRef = useRef(null)
   const positionLineHeadRef = useRef(() => {})
-  const lastBarRef = useRef(null) // { time, open, high, low, close }
-  const didHydrateSeriesRef = useRef(false)
-  const [, setChartError] = useState(null)
   const [topOffset, setTopOffset] = useState(90)
-  const chartTypeRef = useRef('line')
-  useEffect(() => { chartTypeRef.current = chartType }, [chartType])
 
   const [priceFlash, setPriceFlash] = useState({ dir: '', n: 0 })
   const [sparkData, setSparkData] = useState([])
@@ -100,10 +82,6 @@ export default function PricePage() {
     const inner = lineHeadInnerRef.current
     const priceEl = lineHeadPriceRef.current
     if (!inner || !priceEl) return
-    if (chartTypeRef.current !== 'line') {
-      inner.style.opacity = '0'
-      return
-    }
 
     const v = lineSmoothedRef.current
     const { w, h } = snakeSizeRef.current
@@ -711,374 +689,7 @@ export default function PricePage() {
     if (!uiFlushRef.current.timer) {
       uiFlushRef.current.timer = window.setTimeout(flushUi, UI_FLUSH_MS)
     }
-
-    if (chartTypeRef.current !== 'candles') return
-
-    let bucket = Math.floor(ts / candleIntervalMs) * candleIntervalMs
-    const cur = currentCandleRef.current
-    if (cur && bucket < cur.bucket) {
-      bucket = cur.bucket // keep timeline monotonic; ignore stale timestamp drift
-    }
-
-    const pending = []
-    if (cur && cur.bucket !== bucket) {
-      if (Number.isFinite(cur.o)) {
-        pending.push({ t: cur.bucket, o: cur.o, h: cur.h, l: cur.l, c: cur.c, v: cur.v })
-      }
-      if (bucket > cur.bucket + candleIntervalMs && Number.isFinite(cur.c)) {
-        let gap = cur.bucket + candleIntervalMs
-        while (gap < bucket) {
-          pending.push({ t: gap, o: cur.c, h: cur.c, l: cur.c, c: cur.c, v: 0 })
-          gap += candleIntervalMs
-        }
-      }
-    }
-
-    if (pending.length) {
-      setCandles((prev) => [...prev, ...pending].slice(-candlesMax))
-      const series = candleSeriesRef.current
-      if (series) {
-        pending.forEach((c) => {
-          const bar = {
-            time: Math.floor(c.t / 1000),
-            open: c.o,
-            high: c.h,
-            low: c.l,
-            close: c.c
-          }
-          try {
-            series.update(bar)
-            lastBarRef.current = bar
-          } catch {
-            // ignore chart update hiccups
-          }
-        })
-      }
-    }
-
-    if (!cur || cur.bucket !== bucket) {
-      currentCandleRef.current = {
-        bucket,
-        o: price,
-        h: price,
-        l: price,
-        c: price,
-        v: safeQty
-      }
-    } else {
-      cur.h = Math.max(cur.h, price)
-      cur.l = Math.min(cur.l, price)
-      cur.c = price
-      cur.v += safeQty
-      currentCandleRef.current = cur
-    }
-
-    // Update lightweight-charts candle series (use 1s bars)
-    if (candleSeriesRef.current) {
-      const snap = currentCandleRef.current
-      const bar = {
-        time: Math.floor(snap.bucket / 1000),
-        open: snap.o,
-        high: snap.h,
-        low: snap.l,
-        close: snap.c
-      }
-      try {
-        candleSeriesRef.current.update(bar)
-        lastBarRef.current = bar
-      } catch {
-        // ignore chart update hiccups
-      }
-    }
-  }, [candleIntervalMs, flushUi])
-
-  // When interval changes, reset candle history and chart series.
-  useEffect(() => {
-    didHydrateSeriesRef.current = false
-    lastBarRef.current = null
-    currentCandleRef.current = null
-    setCandles([])
-    try {
-      candleSeriesRef.current?.setData([])
-    } catch {
-      // ignore
-    }
-    try {
-      lineHaloSeriesRef.current?.setData([])
-      lineGlowSeriesRef.current?.setData([])
-      lineSeriesRef.current?.setData([])
-    } catch {
-      // ignore
-    }
-    lineSmoothedRef.current = null
-    try {
-      chartRef.current?.applyOptions?.({
-        timeScale: {
-          secondsVisible: candleIntervalMs < 60_000,
-          timeVisible: true,
-        },
-      })
-    } catch {
-      // ignore
-    }
-  }, [candleIntervalMs])
-
-  // Create TradingView-like chart (aggr-style candlestick)
-  useEffect(() => {
-    const el = chartContainerRef.current
-    if (!el) return
-    let ro = null
-    let raf = null
-    let cancelled = false
-
-    setChartError(null)
-
-    const init = () => {
-      if (cancelled) return
-      if (chartRef.current) return
-
-      const w = el.clientWidth
-      const h = el.clientHeight
-      if (!w || !h || w < 50 || h < 50) {
-        raf = window.requestAnimationFrame(init)
-        return
-      }
-
-      try {
-        const chart = createChart(el, {
-          width: w,
-          height: h,
-          layout: {
-            background: { type: ColorType.Solid, color: SPEED.bg },
-            textColor: SPEED.text,
-            fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-            fontSize: 12,
-          },
-          localization: {
-            locale: 'en-US',
-            priceFormatter: (price) => {
-              const p = Number(price)
-              if (!Number.isFinite(p)) return '—'
-              return `$${formatPrice(p)}`
-            },
-          },
-          rightPriceScale: {
-            visible: true,
-            borderColor: SPEED.scaleBorder,
-            textColor: SPEED.textMuted,
-            scaleMargins: { top: 0.1, bottom: 0.12 },
-            entireTextOnly: true,
-            minimumWidth: 76,
-          },
-          leftPriceScale: { visible: false },
-          timeScale: {
-            borderColor: SPEED.scaleBorder,
-            timeVisible: true,
-            secondsVisible: true,
-            rightOffset: 6,
-            barSpacing: 5.5,
-            minBarSpacing: 2.5,
-            fixLeftEdge: true,
-          },
-          grid: {
-            vertLines: { color: SPEED.grid, style: 0 },
-            horzLines: { color: SPEED.grid, style: 0 },
-          },
-          crosshair: {
-            mode: CrosshairMode.Normal,
-            vertLine: {
-              color: SPEED.crosshair,
-              style: 2,
-              width: 1,
-              labelBackgroundColor: SPEED.crosshairLabel,
-            },
-            horzLine: {
-              color: SPEED.crosshair,
-              style: 2,
-              width: 1,
-              labelBackgroundColor: SPEED.crosshairLabel,
-            },
-          },
-          handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-          handleScale: { axisPressedMouseMove: { time: true, price: true }, axisDoubleClickReset: { time: true, price: true }, mouseWheel: true, pinch: true },
-        })
-
-        const series = chart.addSeries(CandlestickSeries, {
-          ...CANDLE_STYLE,
-          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 },
-        })
-
-        const halo = chart.addSeries(LineSeries, {
-          color: SPEED.purpleHalo,
-          lineWidth: 9,
-          lineType: LineType.Curved,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 },
-        })
-
-        const glow = chart.addSeries(AreaSeries, {
-          topColor: SPEED.areaTop,
-          bottomColor: SPEED.areaBot,
-          lineColor: 'rgba(88, 166, 255, 0.22)',
-          lineWidth: 1,
-          lineType: LineType.Curved,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        })
-
-        const line = chart.addSeries(LineSeries, {
-          color: SPEED.purpleLine,
-          lineWidth: 2,
-          lineType: LineType.Curved,
-          priceLineVisible: true,
-          lastValueVisible: true,
-          crosshairMarkerVisible: false,
-          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 },
-        })
-
-        chartRef.current = chart
-        candleSeriesRef.current = series
-        lineHaloSeriesRef.current = halo
-        lineGlowSeriesRef.current = glow
-        lineSeriesRef.current = line
-
-        ro = new ResizeObserver(() => {
-          if (cancelled) return
-          const nextW = el.clientWidth
-          const nextH = el.clientHeight
-          if (!nextW || !nextH) return
-          try {
-            chart.resize(nextW, nextH)
-          } catch {
-            // ignore resize errors (can happen during teardown)
-          }
-          requestAnimationFrame(() => positionLineHeadRef.current?.())
-        })
-        ro.observe(el)
-
-        // show data from the start
-        chart.timeScale().fitContent()
-        requestAnimationFrame(() => positionLineHeadRef.current?.())
-      } catch (e) {
-        setChartError(e?.message || String(e))
-      }
-    }
-
-    init()
-
-    return () => {
-      cancelled = true
-      if (raf) window.cancelAnimationFrame(raf)
-      if (ro) ro.disconnect()
-      try {
-        chartRef.current?.remove()
-      } catch {
-        // ignore
-      }
-      chartRef.current = null
-      candleSeriesRef.current = null
-      lineHaloSeriesRef.current = null
-      lineGlowSeriesRef.current = null
-      lineSeriesRef.current = null
-      lastBarRef.current = null
-    }
-  }, [])
-
-  // Toggle chart series visibility (candles vs glow line)
-  useEffect(() => {
-    const candle = candleSeriesRef.current
-    const halo = lineHaloSeriesRef.current
-    const glow = lineGlowSeriesRef.current
-    const line = lineSeriesRef.current
-    if (!candle || !glow || !line) return
-    try {
-      if (chartType === 'line') {
-        // Hide candles + show line.
-        didHydrateSeriesRef.current = false
-        try { candle.setData([]) } catch { /* ignore */ }
-        try {
-          candle.applyOptions({
-            upColor: 'rgba(0,0,0,0)',
-            downColor: 'rgba(0,0,0,0)',
-            wickUpColor: 'rgba(0,0,0,0)',
-            wickDownColor: 'rgba(0,0,0,0)',
-            borderUpColor: 'rgba(0,0,0,0)',
-            borderDownColor: 'rgba(0,0,0,0)',
-            priceLineVisible: false,
-            lastValueVisible: false,
-          })
-        } catch { /* ignore */ }
-        try {
-          halo?.applyOptions({
-            color: 'rgba(0,0,0,0)',
-            lineWidth: 0,
-            lineType: LineType.Curved,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-          glow.applyOptions({
-            topColor: 'rgba(0,0,0,0)',
-            bottomColor: 'rgba(0,0,0,0)',
-            lineColor: 'rgba(0,0,0,0)',
-            lineWidth: 0,
-            lineType: LineType.Curved,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-          line.applyOptions({
-            color: 'rgba(0,0,0,0)',
-            lineWidth: 0,
-            lineType: LineType.Curved,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-        } catch { /* ignore */ }
-      } else {
-        // Hide line + show candles.
-        try { halo?.setData([]) } catch { /* ignore */ }
-        try { glow.setData([]) } catch { /* ignore */ }
-        try { line.setData([]) } catch { /* ignore */ }
-        try {
-          halo?.applyOptions({
-            color: 'rgba(0,0,0,0)',
-            lineWidth: 1,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-          glow.applyOptions({
-            topColor: 'rgba(0,0,0,0)',
-            bottomColor: 'rgba(0,0,0,0)',
-            lineColor: 'rgba(0,0,0,0)',
-            lineWidth: 0,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-          line.applyOptions({
-            color: 'rgba(0,0,0,0)',
-            lineWidth: 0,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          })
-        } catch { /* ignore */ }
-        try {
-          candle.applyOptions({
-            ...CANDLE_STYLE,
-          })
-        } catch { /* ignore */ }
-      }
-    } catch {
-      // ignore (fallback: they may overlap if visibility isn't supported)
-    }
-  }, [chartType])
+  }, [flushUi])
 
   useEffect(() => {
     let cancelled = false
@@ -1171,109 +782,28 @@ export default function PricePage() {
     }
   }, [flushUi, updateSource])
 
-  // Chart clock: advance 1s candles even if no trades arrive.
-  // Uses latest known LIVE price (from any venue snapshot / WS trade).
+  // Chart clock: advance the snake even if no trades arrive, using the latest
+  // known LIVE price (from any venue snapshot / WS trade).
   useEffect(() => {
     let cancelled = false
     const tick = () => {
       if (cancelled) return
-
-      if (chartTypeRef.current !== 'candles') {
-        const target = Number.isFinite(lastPriceRef.current)
-          ? lastPriceRef.current
-          : Number.isFinite(currentCandleRef.current?.c)
-            ? currentCandleRef.current.c
-            : null
-        if (!Number.isFinite(target)) return
-        if (!Number.isFinite(lineSmoothedRef.current)) {
-          lineSmoothedRef.current = target
-        } else {
-          lineSmoothedRef.current += (target - lineSmoothedRef.current) * LINE_SMOOTH_ALPHA
-        }
-        advanceSnake(lineSmoothedRef.current)
-        return
+      const target = lastPriceRef.current
+      if (!Number.isFinite(target)) return
+      if (!Number.isFinite(lineSmoothedRef.current)) {
+        lineSmoothedRef.current = target
+      } else {
+        lineSmoothedRef.current += (target - lineSmoothedRef.current) * LINE_SMOOTH_ALPHA
       }
-
-      const p = Number.isFinite(lastPriceRef.current)
-        ? lastPriceRef.current
-        : Number.isFinite(currentCandleRef.current?.c)
-          ? currentCandleRef.current.c
-          : null
-      if (!Number.isFinite(p)) return
-
-      const nowBucket = Math.floor(Date.now() / candleIntervalMs) * candleIntervalMs
-      const series = candleSeriesRef.current
-      if (!series) return
-      const cur = currentCandleRef.current
-        if (!cur || !Number.isFinite(cur.o)) {
-        currentCandleRef.current = { bucket: nowBucket, o: p, h: p, l: p, c: p, v: 0 }
-        const bar = { time: Math.floor(nowBucket / 1000), open: p, high: p, low: p, close: p }
-        try {
-          series.update(bar)
-          lastBarRef.current = bar
-          didHydrateSeriesRef.current = true
-        } catch {
-          // ignore
-        }
-        return
-      }
-
-      if (nowBucket <= cur.bucket) return
-
-      const pending = []
-      // finalize current candle
-      pending.push({ t: cur.bucket, o: cur.o, h: cur.h, l: cur.l, c: cur.c, v: cur.v })
-      // fill gaps with flat bars at last close
-      let gap = cur.bucket + candleIntervalMs
-      while (gap < nowBucket) {
-        pending.push({ t: gap, o: cur.c, h: cur.c, l: cur.c, c: cur.c, v: 0 })
-        gap += candleIntervalMs
-      }
-
-      // push pending finalized/gap candles to state (history)
-      if (pending.length) {
-        setCandles((prev) => [...prev, ...pending].slice(-candlesMax))
-        pending.forEach((c) => {
-          const bar = { time: Math.floor(c.t / 1000), open: c.o, high: c.h, low: c.l, close: c.c }
-          try {
-            series.update(bar)
-            lastBarRef.current = bar
-          } catch {
-            // ignore
-          }
-        })
-      }
-
-      // start new candle at nowBucket with flat price
-      currentCandleRef.current = { bucket: nowBucket, o: p, h: p, l: p, c: p, v: 0 }
-      const nextBar = { time: Math.floor(nowBucket / 1000), open: p, high: p, low: p, close: p }
-      try {
-        series.update(nextBar)
-        lastBarRef.current = nextBar
-        didHydrateSeriesRef.current = true
-        chartRef.current?.timeScale()?.scrollToRealTime?.()
-      } catch {
-        // ignore
-      }
+      advanceSnake(lineSmoothedRef.current)
     }
 
-    const timer = window.setInterval(tick, chartTypeRef.current === 'line' ? LINE_TICK_MS : 1000)
+    const timer = window.setInterval(tick, LINE_TICK_MS)
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [candleIntervalMs, chartType, flushUi, advanceSnake])
-
-  useEffect(() => {
-    if (chartType !== 'line') {
-      const inner = lineHeadInnerRef.current
-      if (inner) inner.style.opacity = '0'
-      return
-    }
-    const p = lastPriceRef.current
-    if (Number.isFinite(p)) lineSmoothedRef.current = p
-    requestAnimationFrame(() => positionLineHeadRef.current?.())
-  }, [chartType])
+  }, [advanceSnake])
 
   // WebSocket trade streams
   useEffect(() => {
@@ -1390,80 +920,6 @@ export default function PricePage() {
       })
     }
   }, [symbol, pushTrade, updateSource])
-
-  // keep latest candle visible even before it closes
-  const candleView = useMemo(() => {
-    const list = [...candles]
-    const cur = currentCandleRef.current
-    if (cur && Number.isFinite(cur.o)) {
-      list.push({ t: cur.bucket, o: cur.o, h: cur.h, l: cur.l, c: cur.c, v: cur.v })
-    }
-    return list.slice(-candlesMax)
-  }, [candles])
-
-  // Feed last N candles to chart on mount / reconnect
-  useEffect(() => {
-    const series = candleSeriesRef.current
-    if (!series) return
-    if (!candleView.length) return
-    if (didHydrateSeriesRef.current) return
-
-    const byTime = new Map()
-    for (const c of candleView) {
-      const t = Math.floor(c.t / 1000)
-      if (!Number.isFinite(t)) continue
-      byTime.set(t, {
-        time: t,
-        open: c.o,
-        high: c.h,
-        low: c.l,
-        close: c.c
-      })
-    }
-    const data = Array.from(byTime.values()).sort((a, b) => a.time - b.time)
-    if (!data.length) return
-
-    try {
-      series.setData(data)
-      lastBarRef.current = data[data.length - 1] || null
-      chartRef.current?.timeScale().fitContent()
-      didHydrateSeriesRef.current = true
-    } catch (e) {
-      setChartError(e?.message || String(e))
-    }
-  }, [candleView])
-
-  // Seed the chart with a short flat history so the candle area never looks "empty"
-  // while streams are connecting (especially on first load).
-  useEffect(() => {
-    const series = candleSeriesRef.current
-    if (!series) return
-    if (candles.length) return
-    if (currentCandleRef.current?.bucket) return
-
-    const p = lastPriceRef.current
-    if (!Number.isFinite(p)) return
-
-    const nowSec = Math.floor(Date.now() / 1000)
-    const seedBars = Math.min(60, Math.max(3, Math.ceil(30_000 / candleIntervalMs)))
-    const seed = []
-    const step = Math.floor(candleIntervalMs / 1000)
-    for (let i = seedBars; i > 0; i -= 1) {
-      seed.push({ time: nowSec - (i * step), open: p, high: p, low: p, close: p })
-    }
-
-    try {
-      series.setData(seed)
-      chartRef.current?.timeScale().fitContent()
-      didHydrateSeriesRef.current = true
-    } catch {
-      // ignore
-    }
-
-    setCandles(seed.map((b) => ({ t: b.time * 1000, o: p, h: p, l: p, c: p, v: 0 })))
-    currentCandleRef.current = { bucket: Math.floor((nowSec * 1000) / candleIntervalMs) * candleIntervalMs, o: p, h: p, l: p, c: p, v: 0 }
-    lastBarRef.current = seed[seed.length - 1] || null
-  }, [lastPrice, candles.length, candleIntervalMs])
 
   const aggregated = useMemo(() => {
     const list = VENUES.map(v => ({ key: v.key, ...sources[v.key] || {} }))

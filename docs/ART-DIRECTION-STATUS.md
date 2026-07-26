@@ -15,7 +15,7 @@ Verified by `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`.
 
 | **CSS design tokens** | Two-tier system in `.hb`: `--pr-*` material ramps (never referenced by selectors) and `--hb-*` semantic roles. 12 hexes byte-shared with the canvas PAL. `--hb-faint` was failing AA at 3.5:1 on every metric label; now 6.4:1. |
 | **DOM chrome** | The five-shadow carved plaque on every panel: 2px bronze bevel (lit upper-left), a 2px incision fillet with *inverted* light (what makes a field read as cut into stone), hard cast shadow. Tooled-stone background, Greek-key frieze along the foot of the stele, epigraph flanked by bronze rules. Two latent bugs fixed on the way: `.hb-board`'s `background` shorthand was resetting the tooling away, and a duplicate `.hb-panel` rule was flattening the bevel back off. |
-| **Berth gauges + tally** | REGRESSED — the board was rebuilt as a horizontal strip and the gauges/tally were dropped; snapshot data is computed and discarded. See CODE-AUDIT-2026-07-26.md gap #6. Previously: Six gauge channels cut into the stone, both bars on one shared `deckMax` scale so hull size reads off the gauge; plus on-quay / sailed / unseen counters. |
+| **Berth gauges + tally + legend** | RESTORED (audit fix sweep): bottom-left carved dock with 9 berth gauges on the shared deckMax scale, tally strip (on quay / sailed / unseen), and a '?' legend teaching crest/blazon/torch/empty-bench/whale vocabulary. Previously: Six gauge channels cut into the stone, both bars on one shared `deckMax` scale so hull size reads off the gauge; plus on-quay / sailed / unseen counters. |
 
 ## Not started
 

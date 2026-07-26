@@ -143,14 +143,25 @@ export function getAllValidators() {
 }
 
 /**
- * Fetch current block proposer validator ID from staking precompile
+ * Fetch block proposer validator ID from staking precompile
  * Using getProposerValId() - selector: 0xfbacb0be
  * Uses fallback RPC endpoints if primary fails
+ *
+ * @param {string|null} rpcUrl Preferred endpoint, tried first when given
+ * @param {{ timeoutMs?: number, blockNumber?: number|null }} [options]
+ *   `blockNumber` pins the eth_call to that block's state. With ~0.3s blocks
+ *   and serial endpoint retries, 'latest' can already point at the NEXT block
+ *   by the time the call lands, attributing the proposer off by one — callers
+ *   that know which block they are resolving should always pass it.
  */
-export async function fetchProposerValidatorId(rpcUrl = null, { timeoutMs = 300 } = {}) {
+export async function fetchProposerValidatorId(rpcUrl = null, { timeoutMs = 300, blockNumber = null } = {}) {
   const endpoints = rpcUrl
     ? [rpcUrl, ...MONAD_MAINNET_CONFIG.rpcEndpoints.filter(e => e !== rpcUrl)]
     : MONAD_MAINNET_CONFIG.rpcEndpoints
+
+  const blockTag = Number.isFinite(blockNumber) && blockNumber >= 0
+    ? '0x' + Math.trunc(blockNumber).toString(16)
+    : 'latest'
 
   for (const endpoint of endpoints) {
     // Per-endpoint timeout: with ~0.3s blocks a slow RPC must not stall the
@@ -168,7 +179,7 @@ export async function fetchProposerValidatorId(rpcUrl = null, { timeoutMs = 300 
           params: [{
             to: STAKING_PRECOMPILE,
             data: '0xfbacb0be' // getProposerValId() selector
-          }, 'latest'],
+          }, blockTag],
           id: 1
         })
       })

@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useMonad } from '../contexts/MonadContext'
 import { createShipEngine } from '../ship/engine'
 import { projectFor, monadVisionBlockUrl } from '../utils/monadContracts'
-import { fetchBridgeInflows, freshInflows } from '../utils/bridgeApi'
+import { fetchBridgeInflows, freshInflows, stageFreshInflows } from '../utils/bridgeApi'
 import { fetchMonadTVL, formatTVL } from '../utils/defillamaApi'
 import './ShipPage.css'
 
@@ -67,6 +67,7 @@ export default function ShipPage() {
   const [memCount, setMemCount] = useState(0)
   const [manifest, setManifest] = useState([])
   const [monadTvl, setMonadTvl] = useState(null)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   useEffect(() => {
     const id = 'ship-pixel-font'
@@ -126,20 +127,22 @@ export default function ShipPage() {
         const inflows = await fetchBridgeInflows({ signal: ctrl.signal })
         const engine = engineRef.current
         if (stop || !engine) return
-        const { fresh, next } = freshInflows(inflows, inflowWatermark.current)
-        inflowWatermark.current = next
-        // Oldest first so the pod enters in the order the chain saw them.
-        for (let i = fresh.length - 1; i >= 0; i--) {
-          const inflow = fresh[i]
+        const { fresh } = freshInflows(inflows, inflowWatermark.current)
+        // Oldest first so the pod enters in the order the chain saw them, and
+        // the watermark only advances past transfers that actually staged —
+        // a full pod declines, and the declined transfer stays fresh for the
+        // next poll instead of being eaten by an unconditional advance.
+        inflowWatermark.current = stageFreshInflows(fresh, inflowWatermark.current, (inflow) => {
           const id = inflow?.id ? String(inflow.id).toLowerCase() : ''
-          if (!id || seenBridgeIds.current.has(id)) continue
-          if (!engine.pushInflow({ ...inflow, id })) continue
+          if (!id || seenBridgeIds.current.has(id)) return true
+          if (!engine.pushInflow({ ...inflow, id })) return false
           seenBridgeIds.current.add(id)
           if (seenBridgeIds.current.size > 2000) {
             const first = seenBridgeIds.current.values().next().value
             seenBridgeIds.current.delete(first)
           }
-        }
+          return true
+        })
       } catch {
         // A bridge outage must never take the harbour down with it.
       }
@@ -308,10 +311,49 @@ export default function ShipPage() {
 
       {/* ── tool buttons, top-right ─────────────────────────────────── */}
       <div className="hb-tools">
+        <button
+          type="button"
+          className={`hb-tool${guideOpen ? ' is-on' : ''}`}
+          onClick={() => setGuideOpen((v) => !v)}
+          aria-label="Reading the harbour — legend"
+          aria-pressed={guideOpen}
+          aria-controls="hb-guide"
+        >
+          ?
+        </button>
         <Link to="/" className="hb-tool" aria-label="Back to Purple Rain">
           <ArrowLeft size={15} aria-hidden="true" />
         </Link>
       </div>
+
+      {/* ── the legend: what the pixels mean, in the scene's own words ── */}
+      {guideOpen && (
+        <aside className="hb-guide" id="hb-guide" aria-label="Reading the harbour">
+          <h3>READING THE HARBOUR</h3>
+          <ul>
+            <li>
+              <b>crest</b>
+              <span>helmet silhouette names the tx kind — tall: contract · low: transfer · twin: mint</span>
+            </li>
+            <li>
+              <b>blazon</b>
+              <span>shield device cut from the tx hash — same hash, same soldier, always</span>
+            </li>
+            <li>
+              <b>torch</b>
+              <span>rank as fire, from live value and gas percentiles — it gutters as quay life runs out</span>
+            </li>
+            <li>
+              <b>empty bench</b>
+              <span>a deck seat the sealed block left unused — never filled decoratively</span>
+            </li>
+            <li>
+              <b>whale</b>
+              <span>gold cloak ashore: 100+ MON or top-percentile gas · at sea: a $1M+ bridge inflow</span>
+            </li>
+          </ul>
+        </aside>
+      )}
 
       {/* ── inspected hoplite ──────────────────────────────────────── */}
       {snap?.life && (
@@ -414,6 +456,52 @@ export default function ShipPage() {
           <p className="hb-card-hint">{focus.pinned ? 'pinned · click water to clear' : 'click to pin'}</p>
         </article>
       )}
+
+      {/* ── the quay's own ledger, bottom-left: berth gauges + tally ── */}
+      <section className="hb-dock" aria-label="Berth loading and quay tally">
+        <div className="hb-berths">
+          {(snap?.berths || []).map((b, i) => (
+            <div
+              key={i}
+              className={`hb-berth${b ? ` is-${b.state}` : ' is-idle'}`}
+              title={b ? `berth ${i + 1} · block #${b.number} · ${b.boarded}/${b.load} boarded` : `berth ${i + 1} · open`}
+            >
+              <span className="hb-berth-bar" aria-hidden="true">
+                {b && (
+                  <>
+                    {/* Shared deckMax scale: a full small hull must not read
+                        like a full large one. Load is the block's real muster;
+                        boarded fills toward it. */}
+                    <i
+                      className="hb-berth-load"
+                      style={{ transform: `scaleY(${Math.min(1, b.load / b.deckMax)})` }}
+                    />
+                    <i
+                      className="hb-berth-boarded"
+                      style={{ transform: `scaleY(${Math.min(1, b.boarded / b.deckMax)})` }}
+                    />
+                  </>
+                )}
+              </span>
+              <span className="hb-berth-tx">{b ? `${b.boarded}/${b.load}` : '·'}</span>
+            </div>
+          ))}
+        </div>
+        <div className="hb-tally" aria-label="Transactions on quay, sailed, unseen">
+          <span className="hb-tally-item">
+            <b>{(st?.queued ?? 0).toLocaleString('de-DE')}</b>
+            <i>on quay</i>
+          </span>
+          <span className="hb-tally-item is-sailed">
+            <b>{(st?.sailed ?? 0).toLocaleString('de-DE')}</b>
+            <i>sailed</i>
+          </span>
+          <span className="hb-tally-item is-unseen">
+            <b>{(st?.skipped ?? 0).toLocaleString('de-DE')}</b>
+            <i>unseen</i>
+          </span>
+        </div>
+      </section>
 
       {/* ── raw feed panels, bottom-right (clear of the exit lane) ── */}
       <div className="hb-panels">

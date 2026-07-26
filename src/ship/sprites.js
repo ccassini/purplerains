@@ -66,16 +66,22 @@ export const OAR_STEP = 5
  * Cloak / aspis colours — dark, heavy dyes that read as armour on a violet
  * dusk sea. Pastel cyan, orchid and cream washed out against the water; these
  * stay dense at eleven pixels.
+ *
+ * Each dye is a triple: [cloak, cloakLit, cloakSignal]. The first two paint
+ * sprite pixels; `cloakSignal` never touches the canvas — it is the same dye
+ * lifted until it reads as TEXT on the inspector plaque (every value verified
+ * >= 4.5:1 against the panel). Piping the raw cloak into the DOM rendered
+ * card titles at ~1.2:1 — functionally invisible.
  */
 const CLOAKS = [
-  ['#6b1f28', '#8f2e3a'], // blood wine
-  ['#1e3a4a', '#2d5568'], // deep sea
-  ['#2a3d28', '#3d5a38'], // olive drab
-  ['#3b2a18', '#5a4024'], // burnt umber
-  ['#2c2438', '#43365a'], // night iron
-  ['#4a2818', '#6b3a22'], // bronze rust
-  ['#1a2e3c', '#274058'], // slate navy
-  ['#4a1e2e', '#6a2e42'], // dark madder
+  ['#6b1f28', '#8f2e3a', '#e8697a'], // blood wine
+  ['#1e3a4a', '#2d5568', '#7fc0dd'], // deep sea
+  ['#2a3d28', '#3d5a38', '#9dba63'], // olive drab
+  ['#3b2a18', '#5a4024', '#d9a05f'], // burnt umber
+  ['#2c2438', '#43365a', '#a78bfa'], // night iron
+  ['#4a2818', '#6b3a22', '#e08a54'], // bronze rust
+  ['#1a2e3c', '#274058', '#8fb8d8'], // slate navy
+  ['#4a1e2e', '#6a2e42', '#d1568c'], // dark madder
 ]
 
 /**
@@ -99,8 +105,8 @@ const MONAD_MARK = [
 const CRESTS = ['tall', 'low', 'twin']
 const BLAZONS = ['none', 'boss', 'bars', 'ring']
 
-/** Whale dye: antique gold, not pale cream. */
-const WHALE_CLOAK = ['#b8860b', '#d4a017']
+/** Whale dye: antique gold, not pale cream. Signal matches the gold token. */
+const WHALE_CLOAK = ['#b8860b', '#d4a017', '#fcd34d']
 
 const cache = new Map()
 
@@ -151,13 +157,14 @@ export function hopliteFromTx(hash, meta = {}) {
   else if (category === 'contractDeploy' || category === 'contractCall') crest = 'tall'
   else if (category === 'transfer') crest = 'low'
 
-  const [cloak, cloakLit] = whale ? WHALE_CLOAK : CLOAKS[Math.floor(rnd() * CLOAKS.length)]
+  const [cloak, cloakLit, cloakSignal] = whale ? WHALE_CLOAK : CLOAKS[Math.floor(rnd() * CLOAKS.length)]
 
   return {
     hash,
     category,
     cloak,
     cloakLit,
+    cloakSignal,
     crest,
     crestColor: whale ? '#e8c547' : cloakLit,
     blazon: BLAZONS[Math.floor(rnd() * BLAZONS.length)],

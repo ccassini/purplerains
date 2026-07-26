@@ -46,7 +46,6 @@ async function flush() {
 export function reportError(error, context = {}) {
   const message = error?.message || String(error)
   const stack = error?.stack || null
-  // eslint-disable-next-line no-console
   console.error('[monitoring]', message, context)
   enqueue({
     type: 'error',

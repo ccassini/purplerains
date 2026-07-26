@@ -612,7 +612,6 @@ export default function MonadWorldPage() {
         cullFnRef.current()
         setReady(true)
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[MonadWorld] Init failed:', err)
         setError(err.message || 'Failed to load map')
       }

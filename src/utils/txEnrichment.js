@@ -125,8 +125,8 @@ export async function getTokenMetadata(client, cache, tokenAddress) {
       client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'symbol' }),
     ])
 
-    const decimals =
-      decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) || 18 : 18
+    const onChainDecimals =
+      decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) : null
 
     let symbol = 'TKN'
     if (symbolResult.status === 'fulfilled') {
@@ -136,9 +136,13 @@ export async function getTokenMetadata(client, cache, tokenAddress) {
       }
     }
 
-    let finalDecimals = decimals
-    if (isStableSymbol(symbol) && decimals === 18) {
-      finalDecimals = 6
+    // On-chain decimals() is ground truth and is never overridden. The
+    // USD-substring heuristic only fills in when the call itself failed.
+    let finalDecimals
+    if (onChainDecimals !== null && Number.isInteger(onChainDecimals) && onChainDecimals >= 0) {
+      finalDecimals = onChainDecimals
+    } else {
+      finalDecimals = isStableSymbol(symbol) ? 6 : 18
     }
 
     const meta = { address: key, decimals: finalDecimals, symbol }
@@ -197,7 +201,7 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
 
         const meta = await getTokenMetadata(client, cache, tokenAddr)
         const rawAmount = hexToBigInt(log.data)
-        const amount = decodeTokenAmount(rawAmount, meta?.decimals || 18)
+        const amount = decodeTokenAmount(rawAmount, meta?.decimals ?? 18)
 
         const transferData = {
           log,
@@ -206,7 +210,7 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
           tokenAddress: tokenAddr,
           amount,
           symbol: meta?.symbol || 'TKN',
-          decimals: meta?.decimals || 18,
+          decimals: meta?.decimals ?? 18,
           isStable: isStableSymbol(meta?.symbol),
         }
 
@@ -280,10 +284,8 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
     ) {
       usdValue = enriched.quoteAmount
     }
-    if (usdValue === null && enriched.baseAmount > 0 && enriched.quoteAmount > 0) {
-      const maxAmount = Math.max(enriched.baseAmount, enriched.quoteAmount)
-      if (maxAmount < 1000000) usdValue = maxAmount
-    }
+    // No stable side means no honest dollar figure: usdValue is omitted
+    // entirely rather than guessed from token amounts.
     if (usdValue !== null && Number.isFinite(usdValue)) {
       enriched.usdValue = usdValue
     }

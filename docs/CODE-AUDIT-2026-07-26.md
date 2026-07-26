@@ -109,3 +109,7 @@ The /ship surface's correctness is visual — pixel palette, sprite layout, chro
 ## Verdict
 
 The product is genuinely impressive and largely honest: a live-data pixel harbour with a rigorously tested simulation core (112 green tests, manifest law enforced, pacing parity proven), a rich multi-source data layer, and eleven working satellite pages — but the flagship's source is not committed, the staged index would break CI, and the quality gates (lint, coverage, audit) that exist on paper are either red or unwired. The data layer's single point of failure is real: a silently-stalled WebSocket freezes everything with no watchdog, no gap-fill, and an unmetered request fan-out, and several honesty leaks (fabricated swap USD, dropped bridge inflows, synthetic Agora arcs) contradict the project's own live-only mandate. Fix the git/CI situation first (one afternoon), then the WS resilience and the inspector-contrast bug, and the remaining work is a well-documented art-spec backlog on a foundation that is architecturally sound.
+
+## Coverage baseline
+
+- 2026-07-26 · `npm run test:coverage` (@vitest/coverage-v8 3.2.7, text + json-summary reporters, 126 tests green): **21.49% lines** (21.49% statements, 79.18% branches, 59.18% functions) across all source files. Measured on the uncommitted working tree while sibling audit fixes were still landing.

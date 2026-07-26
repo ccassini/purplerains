@@ -28,7 +28,6 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           animations: ['framer-motion'],
-          charts: ['lightweight-charts'],
           icons: ['lucide-react'],
           wallet: ['viem', 'wagmi', '@wagmi/core', '@wagmi/connectors'],
           query: ['@tanstack/react-query', '@tanstack/query-core'],

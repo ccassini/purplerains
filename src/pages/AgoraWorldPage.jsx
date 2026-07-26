@@ -8,7 +8,8 @@ const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.j
 const FEED_POLL_MS = 1200
 const ARC_TICK_MS = 500
 const ARC_BATCH_LIMIT = 6
-const TRANSFER_MULTIPLIER = 8
+// Live-data mandate: one real transfer spawns exactly one arc.
+const TRANSFER_MULTIPLIER = 1
 const MAX_QUEUE = 3500
 const LED_TICKER_MAX = 42
 const MAX_TX_PER_SOURCE_PER_TICK = 2

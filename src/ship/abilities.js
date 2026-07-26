@@ -56,6 +56,14 @@ const WAKE_SPACING = 6
 const SCRATCH = { x: 0, y: 0 }
 
 /**
+ * Last Light emission phase per soldier. Kept OUTSIDE the SoldierView so the
+ * read-only contract holds: abilities never write to the view. WeakMap entries
+ * die with the soldier object, so nothing leaks when crews are dropped.
+ * @type {WeakMap<object, number>}
+ */
+const lastMotePhase = new WeakMap()
+
+/**
  * Position along a polyline at arc length `d`, written into `out`.
  * The engine's own `pointAt` allocates a fresh object and must not be used in
  * a per-frame, per-sample path like this one.
@@ -165,8 +173,8 @@ export const ABILITIES = [
       // One ember every 0.15s from the torch head. They outlive the body: the
       // sparks are still rising after the figure has faded out.
       const phase = Math.floor(t / 0.15)
-      if (phase === h.__lastMote) return
-      h.__lastMote = phase
+      if (phase === lastMotePhase.get(h)) return
+      lastMotePhase.set(h, phase)
       emitMote(h.x + 5, h.y - 1, ((phase & 1) ? 6 : -6), -14, 0.9, RAMP_LASTLIGHT)
     },
   },
