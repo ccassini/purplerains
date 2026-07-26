@@ -29,6 +29,8 @@ import { fetchMonadTVL, formatTVL, formatChange } from '../utils/defillamaApi'
 import { fetchMonTokenData, formatLargeNumber } from '../utils/coingeckoApi'
 import { formatUsd, formatAmount, formatTimeAgo, formatNumber, isStablecoin, getUtilizationColor } from '../utils/formatters'
 import { projectFor } from '../utils/monadContracts'
+import { Link } from 'react-router-dom'
+import { fetchMonadEcosystem, formatTvlCompact, formatChangePct } from '../utils/ecosystemApi'
 import { logger } from '../utils/logger'
 import './LiveFeed.css'
 
@@ -195,6 +197,11 @@ const updateUrlTab = (tab) => {
 // ============ MAIN COMPONENT ============
 const LiveFeed = () => {
   const { transactions, blocks, validatorLeaderboard, stats, config } = useMonad()
+
+  // Top protocols for the TVL tab — fetched lazily on first open, from the
+  // same live DefiLlama-backed source the /ecosystem page uses.
+  const [topProtocols, setTopProtocols] = useState([])
+  const topProtocolsLoaded = useRef(false)
 
   const [isOpen, setIsOpen] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
@@ -435,6 +442,24 @@ const LiveFeed = () => {
     return () => window.clearInterval(interval)
   }, [isPaused])
 
+  useEffect(() => {
+    if (activeTab !== 'tvl' || topProtocolsLoaded.current) return
+    topProtocolsLoaded.current = true
+    // No cleanup-cancel here on purpose: under StrictMode's double-mount the
+    // first run claims the once-flag and a cleanup-cancel would discard its
+    // result while the second run early-returns on the flag — the strip then
+    // stays empty forever. A late setState on this tiny payload is harmless.
+    fetchMonadEcosystem()
+      .then((data) => {
+        const ranked = (data?.projects || [])
+          .filter((pr) => Number.isFinite(pr?.tvl) && pr.tvl > 0)
+          .sort((a, b) => b.tvl - a.tvl)
+          .slice(0, 6)
+        setTopProtocols(ranked)
+      })
+      .catch(() => { topProtocolsLoaded.current = false })
+  }, [activeTab])
+
   const tps = typeof stats?.currentTps === 'number' && !Number.isNaN(stats.currentTps)
     ? Math.round(stats.currentTps) : 0
 
@@ -636,7 +661,7 @@ const LiveFeed = () => {
                   <span className="col-time">Time</span>
                   <span className="col-block">Block</span>
                   <span className="col-validator">Validator</span>
-                  <span className="col-reward">Reward</span>
+                  <span className="col-reward">Burned</span>
                   <span className="col-txs">TXs</span>
                   <span className="col-fill">Fill %</span>
                   <span className="col-gas">Gas</span>
@@ -694,15 +719,16 @@ const LiveFeed = () => {
                             )}
                           </span>
                           <span className="col-reward">
-                            <span className="reward-value">
+                            <span
+                              className="reward-value burn-value"
+                              title="MON destroyed by this block (gasUsed x baseFee, EIP-1559)"
+                            >
                               {(() => {
-                                // Block reward: 25 MON base + fees
-                                const baseReward = 25
-                                const feeReward = block.gasUsed && block.baseFeePerGas
+                                const burned = block.gasUsed && block.baseFeePerGas
                                   ? (block.gasUsed * block.baseFeePerGas) / 1e18
                                   : 0
-                                const total = baseReward + feeReward
-                                return total >= 1 ? `${total.toFixed(2)}` : `${total.toFixed(4)}`
+                                if (burned <= 0) return '—'
+                                return burned >= 1 ? `🔥 ${burned.toFixed(2)}` : `🔥 ${burned.toFixed(4)}`
                               })()}
                             </span>
                           </span>
@@ -753,7 +779,11 @@ const LiveFeed = () => {
 
                 <div className="blocks-leaderboard-summary">
                   <span>{blockLeaderboard.uniqueValidators}</span>
-                  <span>0.4s block time</span>
+                  <span>
+                    {Number.isFinite(stats?.avgBlockTimeMs) && stats.avgBlockTimeMs > 0
+                      ? `${Math.round(stats.avgBlockTimeMs)}ms block time`
+                      : 'block time —'}
+                  </span>
                   <span>
                     {blockLeaderboard.rows?.[0]?.blocks ? `Top ${blockLeaderboard.rows[0].blocks}` : '—'}
                   </span>
@@ -966,6 +996,47 @@ const LiveFeed = () => {
                   </div>
 
                 </div>
+
+                {topProtocols.length > 0 && (
+                  <div className="tvl-protocols">
+                    <div className="tvl-protocols-head">
+                      <span>Top protocols by TVL</span>
+                      <Link to="/ecosystem" className="tvl-protocols-more">
+                        Full ecosystem →
+                      </Link>
+                    </div>
+                    <div className="tvl-protocols-grid">
+                      {topProtocols.map((pr) => (
+                        <a
+                          key={pr.slug || pr.name}
+                          className="tvl-protocol-card"
+                          href={pr.url || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={pr.name}
+                        >
+                          {pr.logo ? (
+                            <img
+                              src={pr.logo}
+                              alt=""
+                              loading="lazy"
+                              onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
+                            />
+                          ) : (
+                            <span className="tvl-protocol-mono">{(pr.name || '?').slice(0, 1)}</span>
+                          )}
+                          <span className="tvl-protocol-name">{pr.name}</span>
+                          <span className="tvl-protocol-tvl">{formatTvlCompact(pr.tvl)}</span>
+                          {Number.isFinite(pr.change1d) && (
+                            <span className={`tvl-protocol-delta ${pr.change1d >= 0 ? 'positive' : 'negative'}`}>
+                              {formatChangePct(pr.change1d)}
+                            </span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="tvl-footer">
                   <a

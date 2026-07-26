@@ -10,7 +10,6 @@ import './App.css'
 // These are below-the-fold (Footer), background (PurpleRainCanvas), or
 // home-only (Stats, LiveFeed) — safe to code-split.
 const PurpleRainCanvas = lazy(() => import('./components/PurpleRainCanvas'))
-const Stats = lazy(() => import('./components/Stats'))
 const LiveFeed = lazy(() => import('./components/LiveFeed'))
 const Footer = lazy(() => import('./components/Footer'))
 
@@ -76,7 +75,6 @@ function AppContent() {
               path="/"
               element={
                 <Suspense fallback={null}>
-                  <Stats />
                   <LiveFeed />
                 </Suspense>
               }

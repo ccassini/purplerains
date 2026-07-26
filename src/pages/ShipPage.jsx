@@ -457,8 +457,8 @@ export default function ShipPage() {
         </article>
       )}
 
-      {/* ── the quay's own ledger, bottom-left: berth gauges + tally ── */}
-      <section className="hb-dock" aria-label="Berth loading and quay tally">
+      {/* ── berth gauges, bottom-left (above the block panel) ── */}
+      <section className="hb-dock" aria-label="Berth loading">
         <div className="hb-berths">
           {(snap?.berths || []).map((b, i) => (
             <div
@@ -486,20 +486,6 @@ export default function ShipPage() {
               <span className="hb-berth-tx">{b ? `${b.boarded}/${b.load}` : '·'}</span>
             </div>
           ))}
-        </div>
-        <div className="hb-tally" aria-label="Transactions on quay, sailed, unseen">
-          <span className="hb-tally-item">
-            <b>{(st?.queued ?? 0).toLocaleString('de-DE')}</b>
-            <i>on quay</i>
-          </span>
-          <span className="hb-tally-item is-sailed">
-            <b>{(st?.sailed ?? 0).toLocaleString('de-DE')}</b>
-            <i>sailed</i>
-          </span>
-          <span className="hb-tally-item is-unseen">
-            <b>{(st?.skipped ?? 0).toLocaleString('de-DE')}</b>
-            <i>unseen</i>
-          </span>
         </div>
       </section>
 

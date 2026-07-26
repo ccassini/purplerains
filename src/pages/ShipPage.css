@@ -645,32 +645,29 @@
 }
 .hb-burn i { font-style: normal; font-size: 11px; color: var(--hb-quiet); }
 
-/* ── the quay's ledger: berth gauges + tally, bottom-left ────────────────
-   Consumes the snapshot fields the engine always computed: berths[] with
-   boarded/load on the shared deckMax scale, and queued/sailed/skipped. */
+/* ── berth gauges, bottom-left ────────────────────────────────────────────
+   Consumes berths[] with boarded/load on the shared deckMax scale.
+   Grid (not flex): fixed 9 columns, no stretch/reflow when a slot fills. */
 
 .hb-dock {
   position: absolute;
   left: 12px;
   bottom: 46px;
   z-index: 6;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
   padding: 8px 10px 9px;
   contain: paint;
 }
 
 .hb-berths {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-3);
+  display: grid;
+  grid-template-columns: repeat(9, 22px);
+  align-items: end;
+  column-gap: var(--sp-3);
 }
 .hb-berth {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
+  display: grid;
+  justify-items: center;
+  row-gap: 3px;
   width: 22px;
 }
 /* The gauge well: a carved recess, hard edges only. */
@@ -713,34 +710,6 @@
   color: var(--hb-quiet);
   font-variant-numeric: tabular-nums;
 }
-
-.hb-tally {
-  display: flex;
-  gap: var(--sp-5);
-  padding-top: var(--sp-3);
-  border-top: var(--rule) solid var(--hb-edge-dim);
-}
-.hb-tally-item {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-}
-.hb-tally-item b {
-  font-weight: 400;
-  font-size: 16px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  color: var(--hb-ink);
-}
-.hb-tally-item i {
-  font-style: normal;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--hb-faint);
-}
-.hb-tally-item.is-sailed b { color: var(--hb-sailed); }
-.hb-tally-item.is-unseen b { color: var(--hb-quiet); }
 
 /* ── the legend: crest / blazon / torch / bench / whale, taught in place ── */
 

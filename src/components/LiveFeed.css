@@ -2,8 +2,8 @@
   position: absolute;
   top: var(--main-stack-top, 128px);
   left: 40px;
-  /* Reserve space for right-docked Network Statistics + gap (see App.css --stats-rail-width) */
-  width: min(980px, calc(100vw - 40px - 20px - var(--stats-rail-width, 360px)));
+  /* The feed IS the home app now — full-bleed application shell. */
+  width: min(1560px, calc(100vw - 48px));
   /* Same vertical band as Network Statistics rail (header → footer ticker) */
   max-height: calc(100dvh - var(--main-stack-top, 128px) - var(--main-footer-gap, 50px) - 12px);
   background: rgba(10, 10, 18, 0.95);
@@ -1426,3 +1426,85 @@
   }
 }
 
+
+/* ── TVL tab: top protocols strip ────────────────────────────────────────── */
+.tvl-protocols { margin-top: 18px; }
+.tvl-protocols-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.tvl-protocols-head > span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(207, 198, 230, 0.55);
+}
+.tvl-protocols-more {
+  font-size: 13px;
+  color: #a78bfa;
+  text-decoration: none;
+}
+.tvl-protocols-more:hover { color: #f4f1ff; }
+
+.tvl-protocols-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.tvl-protocol-card {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-areas: 'logo name' 'logo tvl' 'logo delta';
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(131, 110, 249, 0.16);
+  border-radius: 10px;
+  background: rgba(20, 13, 40, 0.55);
+  text-decoration: none;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.tvl-protocol-card:hover {
+  border-color: rgba(131, 110, 249, 0.55);
+  transform: translateY(-1px);
+}
+.tvl-protocol-card img,
+.tvl-protocol-mono {
+  grid-area: logo;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #140d28;
+}
+.tvl-protocol-mono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a78bfa;
+  font-weight: 600;
+}
+.tvl-protocol-name {
+  grid-area: name;
+  font-size: 13px;
+  color: #f4f1ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tvl-protocol-tvl {
+  grid-area: tvl;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #efe6ff;
+}
+.tvl-protocol-delta {
+  grid-area: delta;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tvl-protocol-delta.positive { color: #9dba63; }
+.tvl-protocol-delta.negative { color: #e8697a; }
