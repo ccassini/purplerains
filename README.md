@@ -13,14 +13,6 @@ npm run dev
 
 Open `http://localhost:3000` and watch the magic happen! 🪄
 
-## 🛠️ Built with
-
-- React + Vite (for speed)
-- Real-time WebSocket connection to Monad
-- CSS animations (no heavy libraries)
-
-
-
 
 Found a bug? Have an idea? 
 
