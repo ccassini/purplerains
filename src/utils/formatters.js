@@ -127,4 +127,4 @@ export function formatMonCompactFromWei(bi) {
 // --- Epoch constants ---
 
 export const BLOCKS_PER_EPOCH = 50_000
-export const BLOCK_TIME_MS = 400
+export const BLOCK_TIME_MS = 300

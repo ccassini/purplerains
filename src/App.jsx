@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { motion } from 'framer-motion'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import Header from './components/Header'
 import ErrorBoundary from './components/ErrorBoundary'
 import { MonadProvider } from './contexts/MonadContext'
@@ -53,7 +53,7 @@ function PageFallback() {
 
 function AppContent() {
   const location = useLocation()
-  const isOverlayPage = ['/price', '/staking', '/staking-calculator', '/validator-requirements', '/network', '/ecosystem', '/world', '/world-3d', '/agora-world', '/agora-world-3d', '/ship'].includes(location.pathname)
+  const isOverlayPage = ['/price', '/staking', '/staking-calculator', '/validator-requirements', '/network', '/ecosystem', '/world', '/world-3d', '/agora-world', '/agora-world-3d', '/odyssey'].includes(location.pathname)
   const showNetworkFooter =
     !isOverlayPage ||
     location.pathname === '/world' ||
@@ -64,7 +64,7 @@ function AppContent() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <Header />
       <main id="main-content" className="main-content">
-        {location.pathname !== '/network' && location.pathname !== '/ecosystem' && location.pathname !== '/world' && location.pathname !== '/world-3d' && location.pathname !== '/agora-world' && location.pathname !== '/agora-world-3d' && location.pathname !== '/ship' && (
+        {location.pathname !== '/network' && location.pathname !== '/ecosystem' && location.pathname !== '/world' && location.pathname !== '/world-3d' && location.pathname !== '/agora-world' && location.pathname !== '/agora-world-3d' && location.pathname !== '/odyssey' && (
           <Suspense fallback={null}>
             <PurpleRainCanvas />
           </Suspense>
@@ -89,7 +89,8 @@ function AppContent() {
             <Route path="/world-3d" element={<MonadWorld3DPage />} />
             <Route path="/agora-world" element={<AgoraWorldPage />} />
             <Route path="/agora-world-3d" element={<AgoraWorld3DPage />} />
-            <Route path="/ship" element={<ShipPage />} />
+            <Route path="/odyssey" element={<ShipPage />} />
+            <Route path="/ship" element={<Navigate to="/odyssey" replace />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>

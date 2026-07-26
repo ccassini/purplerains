@@ -13,7 +13,7 @@ const STAKING_PRECOMPILE_ADDRESS = '0x0000000000000000000000000000000000001000'
 // Monad Staking Constants (from official docs)
 const BLOCK_REWARD = 25 // MON per block
 // Use app config for block time (more accurate & consistent)
-const BLOCK_TIME_MS = MONAD_MAINNET_CONFIG.blockTime || 500
+const BLOCK_TIME_MS = MONAD_MAINNET_CONFIG.blockTime || 300
 const BLOCKS_PER_YEAR = Math.floor((365 * 24 * 60 * 60 * 1000) / BLOCK_TIME_MS)
 
 function formatMonNumberFromWei(balanceWei) {

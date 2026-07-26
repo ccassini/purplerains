@@ -116,7 +116,7 @@ export const MONAD_MAINNET_CONFIG = {
   wsUrl: MONAD_WS_ENDPOINTS[0], // WebSocket for real-time subscriptions
   wsEndpoints: MONAD_WS_ENDPOINTS,
   chainId: 143, // 0x8f
-  blockTime: 500, // ~0.5s target block time (Monad is fast!)
+  blockTime: 300, // ~0.3s target block time on Monad mainnet
   maxTps: 10000,
   nativeToken: 'MON',
   explorerUrl: 'https://monadvision.com',

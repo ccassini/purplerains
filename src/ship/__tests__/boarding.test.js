@@ -354,16 +354,16 @@ describe('hull numbers track the chain tip', () => {
     // Warm up: let the first hulls reach their berths.
     for (let i = 0; i < 10; i++) {
       engine.pushVessel(block({ number: 20000 + i, hash: `0xw${i}`, transactionCount: 30 }))
-      pump(0.4)
+      pump(0.3)
     }
-    // Sustained live cadence at 400ms blocks, measuring the visible lag: the
+    // Sustained live cadence at 300ms blocks, measuring the visible lag: the
     // difference between the last pushed number (the HUD tip) and the newest
     // hull actually lying at a berth. Travel time used to make this 15+.
     let worst = 0
     for (let i = 10; i < 60; i++) {
       const tip = 20000 + i
       engine.pushVessel(block({ number: tip, hash: `0xw${i}`, transactionCount: 30 }))
-      pump(0.4)
+      pump(0.3)
       const berthed = engine.getSnapshot().berths
         .filter(Boolean)
         .map((b) => Number(b.number))

@@ -61,7 +61,7 @@ function buildRecruits(transactions) {
 const ACTIVE_POLL_INTERVAL = 1500 // HTTP fallback only (WS is primary)
 const INACTIVE_POLL_INTERVAL = 8000 // When tab is hidden: slow polling (save resources)
 const CACHE_DURATION_MS = 30000 // Cache block data for 30 seconds
-const MAX_REQUESTS_PER_MINUTE = 600 // Rate limit protection (~10/s; Monad produces ~3.3 blocks/s)
+const MAX_REQUESTS_PER_MINUTE = 600 // Rate limit protection (~10/s; Monad produces ~3.33 blocks/s at 300ms)
 const REQUEST_COOLDOWN_MS = 120 // Minimum time between polls — must stay under the ~300ms block time
 
 // Transaction fan-in control. `transactions` is part of the context value, so
@@ -1031,7 +1031,7 @@ export const MonadProvider = ({ children }) => {
       try {
         setConnectionStatus('connecting')
         // Load validator metadata alongside the RPC connection so proposer
-        // names resolve no matter which page is the entry point (/ship
+        // names resolve no matter which page is the entry point (/odyssey
         // included). Idempotent and never throws.
         const [monadConnection] = await Promise.all([
           createMonadConnection(MONAD_MAINNET_CONFIG),

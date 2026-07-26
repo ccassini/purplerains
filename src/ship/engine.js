@@ -39,11 +39,11 @@ const INTAKE_BURST = 64
  */
 const CATCHUP_DEPTH = 24
 /**
- * Monad seals ~3 blocks/s (~330ms). Live feed often delivers a burst of three
+ * Monad seals a block every ~300ms. Live feed often delivers a burst of three
  * in one React commit — releasing them all at once made a convoy of three.
  * Pace the Odyssey near live block time; accelerate when the queue falls behind.
  */
-const BLOCK_INTERVAL = 0.30
+const BLOCK_INTERVAL = 0.28
 /** Catch-up when the queue is deep — still never dump a whole burst in one frame. */
 const BLOCK_INTERVAL_MIN = 0.10
 /** Clear space a pass-through lane needs before another hull launches. */
@@ -54,22 +54,22 @@ const LANE_GAP = 36
  * screen before they moor or leave, so the fleet reads as a procession rather
  * than a blink of hulls.
  */
-const APPROACH_SPEED = 265
+const APPROACH_SPEED = 300
 const PASS_SPEED = 72
 /** Distant fleet lane drifts slower so the back of the sea stays full. */
 const FLEET_SPEED = 52
 const PASS_NEAR_SPEED = 88
 /** Distance before the berth over which an arrival angles in to the quay. */
 const TURN_IN = 160
-const DEPART_ACCEL = 44
-const DEPART_SPEED_MAX = 88
+const DEPART_ACCEL = 60
+const DEPART_SPEED_MAX = 110
 /**
  * Horizontal run a departing ship takes to settle onto its exit lane.
  * Long on purpose — the peel-away is part of the on-screen life of the hull.
  */
 const DEPART_RUN = 100
 /** Gangplank run-out and haul-in — boarding waits until this finishes. */
-const PLANK_SECONDS = 0.3
+const PLANK_SECONDS = 0.22
 /**
  * Clear water (buffer px) an inbound keeps behind a ship still on the berth.
  * Relief idles on the fairway instead of ramming the moored hull.
@@ -80,16 +80,16 @@ const BERTH_WAIT_GAP = 18
  * MIN_ALONGSIDE ships loading at once — nine abreast.
  */
 const MIN_ALONGSIDE = 9
-const MIN_DWELL = 0.85
+const MIN_DWELL = 0.62
 /** After seal, wait this long for any last leaps before casting off. */
-const STRAGGLER_GRACE = 0.3
+const STRAGGLER_GRACE = 0.2
 /**
  * Leap interval while moored. A deck of ~8 seats fills in under a third of a
  * second — matching a block that arrives before the previous one has left.
  */
-const BOARD_INTERVAL = 0.04
+const BOARD_INTERVAL = 0.03
 /** Arc length per second along a leap path (quay → seat). */
-const LEAP_SPEED = 200
+const LEAP_SPEED = 240
 /**
  * Mempool life on the quay. Soldiers wait for their block; they only walk off
  * when the Odyssey truly has nothing for them.
