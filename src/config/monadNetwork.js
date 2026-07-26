@@ -2,18 +2,32 @@
 // Centralized so it can be reused across the app
 
 // Multiple RPC endpoints for fallback (ordered by performance and rate limit tolerance)
+/**
+ * Ordered by measured health (benchmarked 2026-07-26, two eth_blockNumber
+ * shots each): monadinfra is the Monad Foundation's own infra and answered
+ * 135-302ms; rpc2.monad.xyz returned 429 on every attempt and sits last as a
+ * desperation fallback only.
+ */
 export const MONAD_RPC_ENDPOINTS = [
   import.meta.env.VITE_MONAD_RPC || 'https://rpc.monad.xyz',
-  'https://rpc1.monad.xyz',
-  'https://monad-mainnet.drpc.org',
-  'https://rpc3.monad.xyz',
   'https://rpc-mainnet.monadinfra.com',
-  'https://rpc2.monad.xyz',
+  'https://rpc1.monad.xyz',
+  'https://rpc3.monad.xyz',
+  'https://monad-mainnet.drpc.org',
   'https://monad-mainnet-rpc.spidernode.net',
+  'https://rpc2.monad.xyz',
 ].filter(Boolean)
 
+/**
+ * All three verified live with an eth_subscribe(newHeads) handshake on
+ * 2026-07-26 (204-265ms to first message). More than one entry matters: the
+ * staleness watchdog reconnects by ROTATING through this list, so a silently
+ * dead provider no longer means reconnecting to the same dead socket forever.
+ */
 export const MONAD_WS_ENDPOINTS = [
   import.meta.env.VITE_MONAD_WS || 'wss://rpc.monad.xyz',
+  'wss://rpc-mainnet.monadinfra.com',
+  'wss://monad-mainnet.drpc.org',
 ].filter(Boolean)
 
 // Known stablecoin contract addresses on Monad (VERIFIED REAL ADDRESSES)

@@ -10,7 +10,7 @@ import React, {
 import { createMonadConnection, computeLiveTps, computeAvgBlockTimeMs } from '../utils/monadUtils'
 import TransactionAnalyzer from '../utils/transactionAnalyzer'
 import { logger } from '../utils/logger'
-import { MONAD_MAINNET_CONFIG } from '../config/monadNetwork'
+import { MONAD_MAINNET_CONFIG, MONAD_WS_ENDPOINTS } from '../config/monadNetwork'
 import { fetchProposerValidatorId, getValidatorById, loadValidatorMetadata } from '../utils/validatorApi'
 import { requestThrottler } from '../utils/performance'
 import {
@@ -158,6 +158,8 @@ export const MonadProvider = ({ children }) => {
   // Set before teardown closes the socket so onclose never reschedules a
   // reconnect for a socket we killed on purpose (unmount, StrictMode remount).
   const wsIntentionalCloseRef = useRef(false)
+  /** Reconnect attempt counter — indexes into MONAD_WS_ENDPOINTS. */
+  const wsAttemptRef = useRef(0)
   // Staleness watchdog: wall-clock time of the last published block.
   const lastBlockReceivedAtRef = useRef(0)
   const wsWatchdogIntervalRef = useRef(null)
@@ -771,16 +773,25 @@ export const MonadProvider = ({ children }) => {
 
   // WebSocket connection for real-time block updates
   const connectWebSocket = useCallback(() => {
-    if (!connection || !MONAD_MAINNET_CONFIG.wsUrl) return false
+    if (!connection || !MONAD_WS_ENDPOINTS.length) return false
     if (wsRef.current) return true // already connected/connecting
 
     wsIntentionalCloseRef.current = false
 
     try {
-      const ws = new WebSocket(MONAD_MAINNET_CONFIG.wsUrl)
+      // Rotate through the verified endpoints: attempt N uses endpoint
+      // N % list-length, so a provider that dies (or silently stalls and gets
+      // dropped by the watchdog) is not redialed forever while healthy
+      // alternatives sit unused.
+      const wsUrl = MONAD_WS_ENDPOINTS[wsAttemptRef.current % MONAD_WS_ENDPOINTS.length]
+      wsAttemptRef.current += 1
+      logger.log(`WebSocket dialing ${wsUrl}`)
+      const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         logger.log('WebSocket connected to Monad')
+        // A successful dial re-arms the rotation at the primary for next time.
+        wsAttemptRef.current = 0
         // Subscribe to new block headers
         ws.send(JSON.stringify({
           jsonrpc: '2.0',
