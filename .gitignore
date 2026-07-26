@@ -73,3 +73,5 @@ mainnet/
 public/backgroud.png
 images.jpeg
 dist/
+.vercel
+.env*

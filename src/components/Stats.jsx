@@ -280,16 +280,16 @@ const Stats = () => {
 
           {/* Epoch Details */}
           <div className="epoch-details-grid">
-            <div className="epoch-detail">
-              <span className="detail-label">ROUND</span>
+            <div className="epoch-detail" title="Latest block number">
+              <span className="detail-label">Block</span>
               <span className="detail-value">{formatNumberCompact(latestBlock?.number || 0)}</span>
             </div>
-            <div className="epoch-detail">
-              <span className="detail-label">STATUS</span>
+            <div className="epoch-detail" title="Consensus status of the latest block">
+              <span className="detail-label">Status</span>
               <span className="detail-value status-ok">Finalized</span>
             </div>
-            <div className="epoch-detail">
-              <span className="detail-label">TXS</span>
+            <div className="epoch-detail" title="Transactions in the latest block">
+              <span className="detail-label">Txs / Block</span>
               <span className="detail-value">{latestBlock?.transactionCount || 0}</span>
             </div>
           </div>
@@ -321,7 +321,7 @@ const Stats = () => {
             <div className="staking-stat">
               <div className="staking-stat-header">
                 <Layers size={14} className="staking-icon" />
-                <span className="staking-label">Staking Pool</span>
+                <span className="staking-label">Total Staked</span>
               </div>
               <div className="staking-value">
                 {stakingData.loading ? (

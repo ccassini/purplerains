@@ -28,12 +28,151 @@ import { useMonad } from '../contexts/MonadContext'
 import { fetchMonadTVL, formatTVL, formatChange } from '../utils/defillamaApi'
 import { fetchMonTokenData, formatLargeNumber } from '../utils/coingeckoApi'
 import { formatUsd, formatAmount, formatTimeAgo, formatNumber, isStablecoin, getUtilizationColor } from '../utils/formatters'
+import { projectFor } from '../utils/monadContracts'
 import { logger } from '../utils/logger'
 import './LiveFeed.css'
 
 const MAX_ROWS = 100
 const SWAP_TICK_MS = 50
 const TRANSFER_TICK_MS = 150
+
+// ============ TOKEN ICONS ============
+/** Token icon files that actually ship in /public — never guess beyond this map. */
+const TOKEN_ICON_SRC = {
+  MON: '/monad_logo.png',
+  WMON: '/monad_logo.png',
+  USDC: '/usdc.avif',
+  USDT0: '/usdt0.webp',
+  AUSD: '/ausd.png',
+  USD1: '/usd1.svg',
+  LVUSD: '/lvusd.png'
+}
+
+/**
+ * Icon path for a token symbol, or null when we don't ship one.
+ * @param {string | null | undefined} symbol
+ * @returns {string | null}
+ */
+export function tokenIcon(symbol) {
+  if (!symbol) return null
+  return TOKEN_ICON_SRC[String(symbol).toUpperCase()] || null
+}
+
+/** Small round token icon; unknown symbols get an obvious monogram fallback. */
+const TokenIcon = ({ symbol }) => {
+  const src = tokenIcon(symbol)
+  const letter = String(symbol || '?').charAt(0).toUpperCase()
+  return (
+    <span className="token-icon" title={symbol || undefined}>
+      {src ? (
+        <img
+          src={src}
+          alt={symbol || ''}
+          width="16"
+          height="16"
+          loading="lazy"
+          onError={(e) => {
+            e.target.style.display = 'none'
+            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex'
+          }}
+        />
+      ) : null}
+      <span className="token-icon-fallback" style={{ display: src ? 'none' : 'flex' }}>
+        {letter}
+      </span>
+    </span>
+  )
+}
+
+// ============ SWAP ROW DERIVATION ============
+const MON_LIKE_SYMBOLS = new Set(['MON', 'WMON'])
+
+/** @param {string | null | undefined} symbol */
+const isMonSymbol = (symbol) => MON_LIKE_SYMBOLS.has(String(symbol || '').toUpperCase())
+
+/**
+ * Stable dedupe key: one tx (plus log index when the source provides one) is
+ * exactly one feed row, no matter how many times the pipeline re-delivers it.
+ * @param {{ hash: string, logIndex?: number | null }} tx
+ */
+const swapRowKey = (tx) =>
+  tx.logIndex !== undefined && tx.logIndex !== null ? `${tx.hash}#${tx.logIndex}` : tx.hash
+
+/**
+ * Turn an analyzed/enriched DeFi tx into one honest feed row.
+ *
+ * - Two observed legs (decoded ERC-20 transfers, or native MON sent with the
+ *   call) → a swap row. Direction is only stated when a reference leg
+ *   (stablecoin or MON/WMON) makes it derivable; otherwise the row is a
+ *   neutral "Swap".
+ * - One observed leg → a "flow" row: a DEX interaction where only one token
+ *   movement is known. Labeled as such, never dressed up as a pair.
+ * - No token movement at all → null (a 0-value router call is not a trade).
+ *
+ * @param {Record<string, any>} tx
+ * @returns {Record<string, any> | null}
+ */
+function deriveSwapRow(tx) {
+  const decodedSold =
+    typeof tx.baseAmount === 'number' && Number.isFinite(tx.baseAmount) && tx.baseAmount > 0 && tx.baseSymbol
+      ? { amount: tx.baseAmount, symbol: tx.baseSymbol }
+      : null
+  const bought =
+    typeof tx.quoteAmount === 'number' && Number.isFinite(tx.quoteAmount) && tx.quoteAmount > 0 && tx.quoteSymbol
+      ? { amount: tx.quoteAmount, symbol: tx.quoteSymbol }
+      : null
+
+  // Native MON attached to the call is a real observed leg (tx.value).
+  const nativeAmount = Number.parseFloat(tx.value || 0) || 0
+  const sold = decodedSold || (nativeAmount > 0 ? { amount: nativeAmount, symbol: 'MON' } : null)
+
+  if (!sold && !bought) return null
+
+  const kind = sold && bought ? 'swap' : 'flow'
+
+  let direction = null
+  if (kind === 'swap') {
+    const soldStable = isStablecoin(sold.symbol)
+    const boughtStable = isStablecoin(bought.symbol)
+    if (soldStable && !boughtStable) direction = 'Buy'
+    else if (boughtStable && !soldStable) direction = 'Sell'
+    else if (isMonSymbol(sold.symbol) && !isMonSymbol(bought.symbol)) direction = 'Buy'
+    else if (isMonSymbol(bought.symbol) && !isMonSymbol(sold.symbol)) direction = 'Sell'
+  }
+
+  // Pair reads token-first / reference-second, matching the Buy/Sell verb.
+  const pairSymbols =
+    kind === 'swap'
+      ? direction === 'Buy'
+        ? [bought.symbol, sold.symbol]
+        : [sold.symbol, bought.symbol]
+      : [(sold || bought).symbol]
+
+  let usdValue = null
+  if (typeof tx.usdValue === 'number' && Number.isFinite(tx.usdValue) && tx.usdValue > 0) {
+    usdValue = tx.usdValue
+  } else if (sold && isStablecoin(sold.symbol)) {
+    usdValue = sold.amount
+  } else if (bought && isStablecoin(bought.symbol)) {
+    usdValue = bought.amount
+  }
+
+  return {
+    id: swapRowKey(tx),
+    hash: tx.hash,
+    kind,
+    direction,
+    usdValue,
+    sold,
+    bought,
+    pairSymbols,
+    pairLabel: pairSymbols.join('/'),
+    from: tx.from,
+    to: tx.to,
+    createdAt: Date.now(),
+    isConfirmedSwap: Boolean(tx.isConfirmedSwap)
+  }
+}
 
 // ============ URL QUERY HELPERS ============
 const getTabFromUrl = () => {
@@ -201,71 +340,39 @@ const LiveFeed = () => {
     transactions.forEach((tx) => {
       if (!tx || !tx.hash) return
 
-      // Handle DeFi Swaps
+      // Handle DeFi swaps — a tx is ONE row, keyed by hash (+ log index).
       if (tx.category === 'defi' || tx.isDexTx || tx.isConfirmedSwap) {
-        if (processedSwapHashesRef.current.has(tx.hash)) return
-        processedSwapHashesRef.current.add(tx.hash)
-        if (processedSwapHashesRef.current.size > 2000) {
-          const hashes = Array.from(processedSwapHashesRef.current)
-          hashes.slice(0, 1000).forEach((h) => processedSwapHashesRef.current.delete(h))
-        }
-
-        const isSimTx = Boolean(tx.isSimulated)
-        let baseAmount = Number.parseFloat(tx.value || 0) || 0
-        let baseSymbol = 'MON'
-        let quoteSymbol = 'MON'
-        let priceUsd = null
-        let usdValue = null
-        let quoteAmount = null
-        let pairLabel = baseSymbol
-
-        if (typeof tx.baseAmount === 'number' && tx.baseAmount > 0) baseAmount = tx.baseAmount
-        if (tx.baseSymbol) baseSymbol = tx.baseSymbol
-        if (typeof tx.quoteAmount === 'number' && tx.quoteAmount > 0) quoteAmount = tx.quoteAmount
-        if (tx.quoteSymbol) quoteSymbol = tx.quoteSymbol
-        if (tx.pairLabel) pairLabel = tx.pairLabel
-        if (typeof tx.price === 'number' && Number.isFinite(tx.price)) priceUsd = tx.price
-        if (typeof tx.usdValue === 'number' && Number.isFinite(tx.usdValue) && tx.usdValue > 0) usdValue = tx.usdValue
-
-        if (usdValue === null || usdValue === 0) {
-          if (isStablecoin(baseSymbol) && baseAmount > 0) usdValue = baseAmount
-          else if (isStablecoin(quoteSymbol) && quoteAmount > 0) usdValue = quoteAmount
-        }
-
         // Legacy simulated txs (should not appear on live RPC path)
-        if (isSimTx) return
+        if (tx.isSimulated) return
 
-        const lastNibble = tx.hash.slice(-1)
-        const direction = parseInt(lastNibble, 16) % 2 === 0 ? 'Buy' : 'Sell'
-        const createdAt = Date.now()
+        const key = swapRowKey(tx)
+        if (processedSwapHashesRef.current.has(key)) return
+        processedSwapHashesRef.current.add(key)
+        if (processedSwapHashesRef.current.size > 2000) {
+          const keys = Array.from(processedSwapHashesRef.current)
+          keys.slice(0, 1000).forEach((k) => processedSwapHashesRef.current.delete(k))
+        }
 
-        pushToSwapQueue({
-          id: `${tx.hash}-${createdAt}`,
-          hash: tx.hash,
-          direction,
-          price: priceUsd,
-          usdValue,
-          baseAmount,
-          quoteAmount,
-          baseSymbol,
-          quoteSymbol,
-          pairLabel,
-          from: tx.from,
-          to: tx.to,
-          createdAt,
-          isConfirmedSwap: tx.isConfirmedSwap || false
-        })
+        const row = deriveSwapRow(tx)
+        if (row) pushToSwapQueue(row)
+        // A swap-category tx never doubles as a transfer row.
+        return
       }
 
       // Handle Transfers (native MON transfers only - filter out 0 value and contract calls)
-      const isTransfer = tx.category === 'transfer' || 
-        tx.type === 'transfer' || 
+      const isTransfer = tx.category === 'transfer' ||
+        tx.type === 'transfer' ||
         tx.categoryDisplay === 'Transfer' ||
         (!tx.isDexTx && tx.category !== 'defi' && tx.category !== 'nft' && tx.category !== 'contractDeploy')
-      
+
       if (isTransfer) {
         if (processedTransferHashesRef.current.has(tx.hash)) return
-        
+        processedTransferHashesRef.current.add(tx.hash)
+        if (processedTransferHashesRef.current.size > 2000) {
+          const hashes = Array.from(processedTransferHashesRef.current)
+          hashes.slice(0, 1000).forEach((h) => processedTransferHashesRef.current.delete(h))
+        }
+
         // Parse value - handle string, number, hex formats
         let amount = 0
         if (tx.value !== undefined && tx.value !== null) {
@@ -281,27 +388,20 @@ const LiveFeed = () => {
             amount = Number(tx.value) / 1e18
           }
         }
-        
+
         // Skip if amount is 0 or very small (likely contract call, not real transfer)
         if (amount < 0.000001) return
-        
-        processedTransferHashesRef.current.add(tx.hash)
-        if (processedTransferHashesRef.current.size > 2000) {
-          const hashes = Array.from(processedTransferHashesRef.current)
-          hashes.slice(0, 1000).forEach((h) => processedTransferHashesRef.current.delete(h))
-        }
-        
+
         const symbol = tx.tokenSymbol || 'MON'
-        const createdAt = Date.now()
 
         pushToTransferQueue({
-          id: `${tx.hash}-${createdAt}`,
+          id: tx.hash,
           hash: tx.hash,
           from: tx.from,
           to: tx.to,
           amount,
           symbol,
-          createdAt
+          createdAt: Date.now()
         })
       }
     })
@@ -315,7 +415,8 @@ const LiveFeed = () => {
       // Process 1 swap per tick - sequential but VERY fast
       const batch = swapQueueRef.current.splice(0, 1)
       if (!batch.length) return
-      setSwapRows((prev) => [...batch, ...prev].slice(0, MAX_ROWS))
+      // Render-level dedupe: one tx key is one row, even if re-queued upstream.
+      setSwapRows((prev) => [batch[0], ...prev.filter((r) => r.id !== batch[0].id)].slice(0, MAX_ROWS))
     }, SWAP_TICK_MS)
     return () => window.clearInterval(interval)
   }, [isPaused])
@@ -328,7 +429,8 @@ const LiveFeed = () => {
       // Process 1 transfer per tick (original speed)
       const batch = transferQueueRef.current.splice(0, 1)
       if (!batch.length) return
-      setTransferRows((prev) => [...batch, ...prev].slice(0, MAX_ROWS))
+      // Render-level dedupe: one tx hash is one row, even if re-queued upstream.
+      setTransferRows((prev) => [batch[0], ...prev.filter((r) => r.id !== batch[0].id)].slice(0, MAX_ROWS))
     }, TRANSFER_TICK_MS)
     return () => window.clearInterval(interval)
   }, [isPaused])
@@ -435,6 +537,7 @@ const LiveFeed = () => {
                 <span className="col-time">Time</span>
                 <span className="col-side">Type</span>
                 <span className="col-pair">Pair</span>
+                <span className="col-project">Project</span>
                 <span className="col-value">Value</span>
                 <span className="col-amount">Amount</span>
                 <span className="col-maker">Maker</span>
@@ -446,6 +549,11 @@ const LiveFeed = () => {
                   {swapRows.map((row) => {
                     const secondsAgo = Math.max(0, Math.floor((now - row.createdAt) / 1000))
                     const isBuy = row.direction === 'Buy'
+                    const isSell = row.direction === 'Sell'
+                    const sideClass = isBuy ? 'swap-side-buy' : isSell ? 'swap-side-sell' : 'swap-side-neutral'
+                    const sideLabel = row.direction || (row.kind === 'swap' ? 'Swap' : 'DEX')
+                    const SideIcon = isBuy ? ArrowUpRight : isSell ? ArrowDownRight : ArrowRightLeft
+                    const project = projectFor(row.to)
                     return (
                       <motion.div
                         key={row.id}
@@ -457,17 +565,47 @@ const LiveFeed = () => {
                       >
                         <span className="col-time">{formatTimeAgo(secondsAgo)}</span>
                         <span className="col-side">
-                          <span className={`swap-side-pill ${isBuy ? 'swap-side-buy' : 'swap-side-sell'}`}>
-                            {isBuy ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                            <span>{row.direction}</span>
+                          <span className={`swap-side-pill ${sideClass}`}>
+                            <SideIcon size={12} />
+                            <span>{sideLabel}</span>
                           </span>
                         </span>
-                        <span className="col-pair">{row.pairLabel || row.baseSymbol || 'MON'}</span>
-                        <span className="col-value">{Number.isFinite(row.usdValue) && row.usdValue > 0 ? formatUsd(row.usdValue) : '—'}</span>
+                        <span className="col-pair">
+                          <span className="pair-icons">
+                            {row.pairSymbols.map((symbol, i) => (
+                              <TokenIcon key={`${row.id}-tk-${i}`} symbol={symbol} />
+                            ))}
+                          </span>
+                          <span className="pair-text" title={row.pairLabel}>{row.pairLabel}</span>
+                        </span>
+                        <span className="col-project">
+                          {project ? (
+                            <span className="project-chip" title={project.name}>
+                              {project.logo ? (
+                                <img
+                                  src={project.logo}
+                                  alt=""
+                                  width="14"
+                                  height="14"
+                                  loading="lazy"
+                                  onError={(e) => { e.target.style.display = 'none' }}
+                                />
+                              ) : null}
+                              <span className="project-chip-name">{project.name}</span>
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="col-value">
+                          {Number.isFinite(row.usdValue) && row.usdValue > 0 ? (
+                            <span className="value-usd">{formatUsd(row.usdValue)}</span>
+                          ) : (
+                            <span className="value-none" title="No stable leg in this swap — USD value unknown">—</span>
+                          )}
+                        </span>
                         <span className="col-amount">
-                          {row.quoteAmount && Number.isFinite(row.quoteAmount)
-                            ? `${formatAmount(row.baseAmount, row.baseSymbol)} / ${formatAmount(row.quoteAmount, row.quoteSymbol)}`
-                            : formatAmount(row.baseAmount, row.baseSymbol)}
+                          {row.sold && row.bought
+                            ? `${formatAmount(row.sold.amount, row.sold.symbol)} → ${formatAmount(row.bought.amount, row.bought.symbol)}`
+                            : formatAmount((row.sold || row.bought).amount, (row.sold || row.bought).symbol)}
                         </span>
                         <span className="col-maker">{row.from ? `${row.from.slice(0, 6)}...${row.from.slice(-4)}` : '—'}</span>
                         <span className="col-txn">

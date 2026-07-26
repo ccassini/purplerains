@@ -54,18 +54,31 @@
 }
 
 .live-feed-tab:hover {
-  background: rgba(139, 92, 246, 0.1);
+  background: rgba(131, 110, 249, 0.1);
   color: #c4b5fd;
 }
 
+.live-feed-tab:active {
+  transform: translateY(1px);
+}
+
 .live-feed-tab.active {
-  background: rgba(139, 92, 246, 0.2);
+  background: linear-gradient(180deg, rgba(131, 110, 249, 0.28), rgba(131, 110, 249, 0.14));
+  box-shadow: inset 0 0 0 1px rgba(131, 110, 249, 0.35);
   color: #f9fafb;
   font-weight: 600;
 }
 
 .live-feed-tab.active svg {
   color: #a78bfa;
+}
+
+.live-feed-tab:focus-visible,
+.live-feed-pause:focus-visible,
+.live-feed-hide:focus-visible,
+.live-feed-toggle:focus-visible {
+  outline: 2px solid rgba(131, 110, 249, 0.8);
+  outline-offset: 2px;
 }
 
 /* Actions & Meta */
@@ -570,19 +583,21 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Header Rows */
+/* Header Rows — quiet caps voice so data rows carry the emphasis */
 .live-feed-header-row {
   display: grid;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: rgba(148, 163, 184, 0.9);
+  letter-spacing: 0.08em;
+  color: rgba(148, 163, 184, 0.55);
   padding: 8px 0;
   border-bottom: 1px solid rgba(51, 65, 85, 0.9);
 }
 
 .live-feed-header-row.swaps-header {
-  grid-template-columns: 55px 80px 130px 90px 200px 120px 55px;
+  grid-template-columns: 48px 78px 168px 118px 92px minmax(150px, 1fr) 104px 46px;
+  column-gap: 8px;
 }
 
 .live-feed-header-row.blocks-header {
@@ -614,7 +629,8 @@
 }
 
 .live-feed-row:hover {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(131, 110, 249, 0.09);
+  box-shadow: inset 2px 0 0 rgba(131, 110, 249, 0.65);
 }
 
 .live-feed-row:nth-child(2n) {
@@ -622,7 +638,8 @@
 }
 
 .live-feed-row.swap-row {
-  grid-template-columns: 55px 80px 130px 90px 200px 120px 55px;
+  grid-template-columns: 48px 78px 168px 118px 92px minmax(150px, 1fr) 104px 46px;
+  column-gap: 8px;
 }
 
 .live-feed-row.block-row {
@@ -704,34 +721,143 @@
 
 /* Column Styles */
 .col-time {
-  color: #94a3b8;
+  color: rgba(148, 163, 184, 0.75);
+  font-variant-numeric: tabular-nums;
 }
 
-.col-value {
-  color: #f97316;
-  font-weight: 600;
+/* VALUE is the loudest cell of a swap row */
+.col-value .value-usd {
+  color: #f8fafc;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Honest em-dash: no stable leg observed, so no dollar figure is claimed */
+.col-value .value-none {
+  color: rgba(148, 163, 184, 0.4);
+  cursor: help;
 }
 
 .col-amount {
-  color: #a855f7;
-  font-size: 0.78rem;
+  color: #c4b5fd;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
 }
 
+/* Maker + txn stay quiet so value/pair read first */
 .col-maker {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 0.75rem;
-  color: #cbd5f5;
+  font-size: 0.72rem;
+  color: rgba(203, 213, 245, 0.55);
 }
 
 .col-txn a {
-  color: #818cf8;
+  color: rgba(129, 140, 248, 0.7);
   text-decoration: none;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
+  transition: color 0.15s ease;
 }
 
-.col-txn a:hover {
+.col-txn a:hover,
+.col-txn a:focus-visible {
   text-decoration: underline;
   color: #a5b4fc;
+}
+
+/* Pair cell: overlapped token icons + pair text */
+.swap-row .col-pair,
+.swaps-header .col-pair {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pair-icons {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.token-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(15, 15, 25, 0.9);
+  border: 1px solid rgba(131, 110, 249, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pair-icons .token-icon + .token-icon {
+  margin-left: -5px;
+}
+
+.token-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Monogram = "we do not ship this logo", visually distinct from real icons */
+.token-icon-fallback {
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #c4b5fd;
+  background: linear-gradient(135deg, rgba(131, 110, 249, 0.28), rgba(88, 28, 135, 0.4));
+}
+
+.pair-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: #e5e7eb;
+}
+
+/* Project attribution chip (known routers/contracts only — never guessed) */
+.col-project {
+  min-width: 0;
+}
+
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px 2px 3px;
+  border-radius: 999px;
+  background: rgba(131, 110, 249, 0.1);
+  border: 1px solid rgba(131, 110, 249, 0.22);
+}
+
+.project-chip img {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.project-chip-name {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: #c4b5fd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Swap Pills */
@@ -755,6 +881,13 @@
   background: rgba(220, 38, 38, 0.18);
   color: #fecaca;
   border: 1px solid rgba(248, 113, 113, 0.6);
+}
+
+/* Neutral pill: swap confirmed but direction not derivable, or single-leg flow */
+.swap-side-neutral {
+  background: rgba(131, 110, 249, 0.14);
+  color: #d8ceff;
+  border: 1px solid rgba(131, 110, 249, 0.5);
 }
 
 /* Transfer Styles */
@@ -846,6 +979,15 @@
   color: #94a3b8;
 }
 
+.col-gas,
+.lb-count,
+.lb-last,
+.block-number,
+.fill-percent,
+.col-transfer-amount {
+  font-variant-numeric: tabular-nums;
+}
+
 .col-link .block-link {
   display: inline-flex;
   align-items: center;
@@ -928,7 +1070,8 @@
   
   .live-feed-header-row.swaps-header,
   .live-feed-row.swap-row {
-    grid-template-columns: 45px 65px 100px 70px 150px 90px 45px;
+    grid-template-columns: 42px 64px 126px 92px 76px minmax(110px, 1fr) 88px 42px;
+    column-gap: 6px;
   }
 }
 
@@ -1006,9 +1149,10 @@
   
   .live-feed-header-row.swaps-header,
   .live-feed-row.swap-row {
-    grid-template-columns: 32px 52px 72px 58px 1fr 44px;
+    grid-template-columns: 32px 52px minmax(84px, 1fr) 58px 1.2fr 44px;
+    column-gap: 5px;
   }
-  
+
   .live-feed-header-row.blocks-header,
   .live-feed-row.block-row {
     grid-template-columns: 30px 72px 68px 48px 30px 1fr 40px 48px;
@@ -1035,7 +1179,9 @@
   }
   
   .live-feed-header-row.swaps-header .col-maker,
-  .live-feed-row.swap-row .col-maker {
+  .live-feed-row.swap-row .col-maker,
+  .live-feed-header-row.swaps-header .col-project,
+  .live-feed-row.swap-row .col-project {
     display: none;
   }
   
@@ -1081,8 +1227,14 @@
 
   .live-feed-header-row.swaps-header,
   .live-feed-row.swap-row {
-    grid-template-columns: 30px 48px 60px 52px 1fr 38px;
+    grid-template-columns: 30px 48px minmax(64px, 1fr) 52px 1.1fr 38px;
+    column-gap: 4px;
     font-size: 0.65rem;
+  }
+
+  .token-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .live-feed-header-row.blocks-header,

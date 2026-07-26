@@ -405,6 +405,18 @@
   color: #86efac;
 }
 
+/* Tabular figures: live numbers tick without jitter and columns stay aligned */
+.detail-value,
+.staking-value,
+.price-amount,
+.countdown-value,
+.countdown-info,
+.latest-block,
+.epoch-num,
+.hash-display {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Staking Section - Compact Design */
 .staking-section {
   display: flex;

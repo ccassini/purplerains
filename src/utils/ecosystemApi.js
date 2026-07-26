@@ -94,20 +94,86 @@ export async function fetchMonadEcosystem() {
   }
 }
 
-/** Compact USD for TVL badges: $1.51B, $252M, $9.3M, $12.4K. */
+/** Ordered largest-first so the first matching tier wins. */
+const USD_TIERS = [
+  { min: 1e12, div: 1e12, suffix: 'T', digits: 2 },
+  { min: 1e9, div: 1e9, suffix: 'B', digits: 2 },
+  { min: 1e6, div: 1e6, suffix: 'M', digits: 1 },
+  { min: 1e3, div: 1e3, suffix: 'K', digits: 1 },
+]
+
+/**
+ * Compact USD in financial notation: $1.53B, $412.7M, $88.4K, $512.
+ * Rounding that crosses a unit boundary promotes ($999.96M → $1.00B) so the
+ * scaled figure never reads as four digits.
+ */
 export function formatTvlCompact(value) {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return null
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`
-  return `$${Math.round(n)}`
+  for (let i = 0; i < USD_TIERS.length; i += 1) {
+    const tier = USD_TIERS[i]
+    if (n < tier.min) continue
+    const scaled = Number((n / tier.div).toFixed(tier.digits))
+    if (scaled >= 1000 && i > 0) {
+      const up = USD_TIERS[i - 1]
+      return `$${(n / up.div).toFixed(up.digits)}${up.suffix}`
+    }
+    return `$${scaled.toFixed(tier.digits)}${tier.suffix}`
+  }
+  return `$${Math.round(n).toLocaleString('en-US')}`
 }
 
-/** Signed percentage for 24h change, or null when DefiLlama has no figure. */
+/** Full USD with thousands separators, for tooltips and title attrs: $1,534,210,000. */
+export function formatTvlFull(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return `$${Math.round(n).toLocaleString('en-US')}`
+}
+
+/**
+ * Signed percentage for 1d/7d change, or null when DefiLlama has no figure.
+ * Values that round to zero render unsigned so "-0.0%" never appears.
+ */
 export function formatChangePct(value) {
+  // Number(null) is 0 — a missing figure must not render as a flat 0.0%.
+  if (value == null || value === '') return null
   const n = Number(value)
   if (!Number.isFinite(n)) return null
-  const sign = n > 0 ? '+' : ''
-  return `${sign}${n.toFixed(1)}%`
+  const rounded = Number(n.toFixed(1))
+  if (rounded === 0) return '0.0%'
+  const sign = rounded > 0 ? '+' : ''
+  return `${sign}${rounded.toFixed(1)}%`
+}
+
+/**
+ * Ignore pools below this TVL when summarizing 24h movement — a $12 pool
+ * swinging +900% is noise, not a headline.
+ */
+const MOVER_MIN_TVL = 10_000
+
+/**
+ * 24h movement summary for the hero band. Pure — operates on the merged
+ * project records returned by fetchMonadEcosystem.
+ *
+ * @param {Array<{tvl?: number|null, change1d?: number|null}>} projects
+ * @returns {{up: number, down: number, topGainer: object|null, topLoser: object|null}}
+ */
+export function computeMovers(projects = []) {
+  let up = 0
+  let down = 0
+  let topGainer = null
+  let topLoser = null
+  for (const p of projects) {
+    if (!(Number(p?.tvl) >= MOVER_MIN_TVL)) continue
+    const change = Number(p?.change1d)
+    if (!Number.isFinite(change) || change === 0) continue
+    if (change > 0) {
+      up += 1
+      if (!topGainer || change > Number(topGainer.change1d)) topGainer = p
+    } else {
+      down += 1
+      if (!topLoser || change < Number(topLoser.change1d)) topLoser = p
+    }
+  }
+  return { up, down, topGainer, topLoser }
 }

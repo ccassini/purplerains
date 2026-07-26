@@ -25,12 +25,14 @@
   --eco-ink2: rgba(244, 241, 255, 0.62);
   --eco-ink3: rgba(244, 241, 255, 0.36);
   --eco-line: rgba(255, 255, 255, 0.08);
-  --eco-line2: rgba(139, 92, 246, 0.28);
+  --eco-line2: rgba(131, 110, 249, 0.3);
   --eco-fill: rgba(20, 14, 34, 0.72);
   --eco-fill2: rgba(28, 20, 48, 0.55);
-  --eco-violet: #8b5cf6;
+  --eco-violet: #836ef9;
   --eco-violet2: #a78bfa;
   --eco-mist: #c4b5fd;
+  --eco-glow: rgba(131, 110, 249, 0.14);
+  --eco-glow2: rgba(131, 110, 249, 0.24);
   --eco-pos: #5ce0a8;
   --eco-neg: #ff8092;
   --eco-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
@@ -42,7 +44,7 @@
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(80% 60% at 50% 0%, rgba(124, 107, 255, 0.16), transparent 60%),
+    radial-gradient(80% 60% at 50% 0%, rgba(131, 110, 249, 0.16), transparent 60%),
     radial-gradient(70% 50% at 90% 100%, rgba(88, 60, 180, 0.14), transparent 62%),
     linear-gradient(180deg, #0a0715 0%, #08060f 60%, #050409 100%);
 }
@@ -50,7 +52,7 @@
 .eco::-webkit-scrollbar { width: 10px; }
 .eco::-webkit-scrollbar-track { background: transparent; }
 .eco::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.28);
+  background: rgba(131, 110, 249, 0.28);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -60,64 +62,159 @@
   background-clip: content-box;
 }
 
-/* ── loading / error ─────────────────────────────────────────────────────── */
+.eco-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
-.eco-center {
+/* ── loading skeleton ────────────────────────────────────────────────────── */
+
+.eco-sk {
+  display: block;
+  border-radius: 8px;
+  background: rgba(131, 110, 249, 0.1);
+  animation: eco-sk-pulse 1.5s ease-in-out infinite;
+}
+.eco-sk-eyebrow { width: 130px; height: 10px; margin-bottom: 14px; }
+.eco-sk-title { width: min(280px, 70%); height: 44px; margin-bottom: 14px; border-radius: 12px; }
+.eco-sk-lede { width: min(360px, 90%); height: 12px; }
+.eco-sk-label { width: 110px; height: 10px; margin-bottom: 12px; }
+.eco-sk-big { width: 190px; height: 46px; border-radius: 12px; }
+.eco-sk-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.eco-sk-metric { width: 128px; height: 56px; border-radius: 12px; }
+.eco-card-skeleton { gap: 10px; }
+.eco-sk-logo { width: 36px; height: 36px; border-radius: 10px; }
+.eco-sk-line { width: 80%; height: 11px; }
+.eco-sk-line-short { width: 45%; height: 11px; }
+
+/* Stagger so the pulse reads as a wave rather than a blink. */
+.eco-card-skeleton:nth-child(3n) .eco-sk { animation-delay: 0.2s; }
+.eco-card-skeleton:nth-child(3n + 1) .eco-sk { animation-delay: 0.4s; }
+
+@keyframes eco-sk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── error state ─────────────────────────────────────────────────────────── */
+
+.eco-fault {
   min-height: 60vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  color: var(--eco-ink2);
-  font-size: 13px;
+  gap: 10px;
+  text-align: center;
+  padding: 0 20px;
 }
-.eco-spinner-logo {
+.eco-fault-ring {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
   border-radius: 50%;
-  animation: eco-pulse 1.4s ease-in-out infinite;
+  border: 1px solid rgba(255, 128, 146, 0.35);
+  background: rgba(255, 128, 146, 0.08);
+  color: var(--eco-neg);
 }
-.eco-error { color: var(--eco-neg); }
+.eco-fault-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.eco-fault-msg {
+  max-width: 46ch;
+  font-size: 12.5px;
+  color: var(--eco-ink3);
+  font-family: var(--eco-mono);
+}
 .eco-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
   padding: 9px 18px;
   border: 1px solid var(--eco-line2);
   border-radius: 10px;
-  background: rgba(124, 107, 255, 0.14);
+  background: var(--eco-glow);
   color: var(--eco-mist);
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
 }
-.eco-retry:hover { background: rgba(124, 107, 255, 0.24); }
-
-@keyframes eco-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.94); }
+.eco-retry:hover {
+  background: var(--eco-glow2);
+  border-color: rgba(167, 139, 250, 0.5);
 }
 
 /* ── hero ────────────────────────────────────────────────────────────────── */
 
 .eco-hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 24px;
-  padding: 26px 22px 22px;
+  align-items: start;
+  gap: 20px 32px;
+  padding: 28px 26px 22px;
   margin-bottom: 18px;
   border: 1px solid var(--eco-line);
   border-radius: 18px;
   background: linear-gradient(150deg, rgba(30, 22, 52, 0.72), rgba(14, 10, 26, 0.6));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
 }
+.eco-hero::before {
+  /* One violet beam across the band — atmosphere without blur stacks. */
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto;
+  height: 120%;
+  pointer-events: none;
+  background: radial-gradient(45% 55% at 78% 20%, rgba(131, 110, 249, 0.2), transparent 70%);
+}
+.eco-hero > * { position: relative; }
 
 .eco-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--eco-ink3);
   margin-bottom: 6px;
 }
+.eco-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--eco-ink3);
+  flex-shrink: 0;
+}
+.eco-live-dot.is-live {
+  background: var(--eco-pos);
+  box-shadow: 0 0 8px rgba(92, 224, 168, 0.8);
+  animation: eco-live-pulse 2.2s ease-in-out infinite;
+}
+@keyframes eco-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 .eco-title {
-  font-size: clamp(2rem, 1.2rem + 3.2vw, 3.6rem);
+  font-size: clamp(2.1rem, 1.2rem + 3.4vw, 3.8rem);
   font-weight: 700;
   line-height: 0.95;
   letter-spacing: -0.02em;
@@ -127,13 +224,48 @@
   -webkit-text-fill-color: transparent;
 }
 .eco-lede {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: 13px;
   color: var(--eco-ink2);
-  max-width: 46ch;
+  max-width: 44ch;
+}
+
+.eco-hero-tvl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+  padding: 14px 18px;
+  border: 1px solid var(--eco-line2);
+  border-radius: 16px;
+  background: linear-gradient(150deg, rgba(131, 110, 249, 0.2), rgba(131, 110, 249, 0.04));
+  box-shadow: 0 10px 30px rgba(50, 30, 120, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.eco-hero-tvl-label {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--eco-mist);
+}
+.eco-hero-tvl-value {
+  font-family: var(--eco-mono);
+  font-size: clamp(1.9rem, 1.1rem + 2.6vw, 3rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(131, 110, 249, 0.45);
+  cursor: help;
+}
+.eco-hero-tvl-sub {
+  font-size: 11px;
+  color: var(--eco-ink2);
 }
 
 .eco-metrics {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -151,7 +283,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--eco-ink3);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 .eco-metric dd {
   margin: 0;
@@ -160,13 +292,49 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.eco-metric-lead {
-  border-color: var(--eco-line2);
-  background: linear-gradient(150deg, rgba(124, 107, 255, 0.22), rgba(124, 107, 255, 0.05));
+.eco-metric-movers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
-.eco-metric-lead dd {
-  font-size: 24px;
-  color: #fff;
+.eco-metric-movers .eco-up,
+.eco-metric-movers .eco-down { font-size: 14px; }
+.eco-up { color: var(--eco-pos); }
+.eco-down { color: var(--eco-neg); }
+.eco-metric-wide { flex: 1 1 auto; }
+
+.eco-mover {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid var(--eco-line);
+  border-radius: 999px;
+  background: var(--eco-fill2);
+  color: var(--eco-ink2);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, color 0.16s;
+}
+.eco-mover:hover {
+  border-color: var(--eco-line2);
+  background: var(--eco-glow);
+  color: var(--eco-ink);
+}
+.eco-mover-name {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eco-mover .eco-up,
+.eco-mover .eco-down {
+  font-family: var(--eco-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .eco-notice {
@@ -211,12 +379,14 @@
   color: var(--eco-ink);
   font-family: inherit;
   font-size: 13px;
+  transition: border-color 0.16s, box-shadow 0.16s;
 }
 .eco-search-input::placeholder { color: var(--eco-ink3); }
+.eco-search-input:hover { border-color: rgba(131, 110, 249, 0.2); }
 .eco-search-input:focus-visible {
   outline: none;
   border-color: var(--eco-line2);
-  box-shadow: 0 0 0 3px rgba(124, 107, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(131, 110, 249, 0.16);
 }
 .eco-search-input::-webkit-search-cancel-button { display: none; }
 .eco-search-clear {
@@ -256,11 +426,12 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.16s, color 0.16s;
 }
 .eco-sort-btn:hover { color: var(--eco-ink); }
 .eco-sort-btn.is-active {
-  background: rgba(124, 107, 255, 0.24);
+  background: var(--eco-glow2);
   color: #fff;
 }
 
@@ -291,7 +462,7 @@
   border-color: var(--eco-line2);
 }
 .eco-chip.is-active {
-  background: rgba(124, 107, 255, 0.22);
+  background: var(--eco-glow2);
   border-color: var(--eco-line2);
   color: #fff;
 }
@@ -311,7 +482,7 @@
   border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
-  background: rgba(124, 107, 255, 0.1);
+  background: rgba(131, 110, 249, 0.1);
   border: 1px solid var(--eco-line);
 }
 .eco-logo-mono {
@@ -329,8 +500,8 @@
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--eco-mist);
-  background: rgba(124, 107, 255, 0.14);
-  border: 1px solid rgba(124, 107, 255, 0.2);
+  background: rgba(131, 110, 249, 0.14);
+  border: 1px solid rgba(131, 110, 249, 0.2);
   border-radius: 6px;
   padding: 1px 6px;
   /* Long DefiLlama categories ("Onchain Capital Allocator", "Uncollateralized
@@ -351,13 +522,24 @@
   font-variant-numeric: tabular-nums;
   color: var(--eco-ink);
 }
-.eco-change {
+
+.eco-delta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   font-family: var(--eco-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
-.eco-change-up { color: var(--eco-pos); }
-.eco-change-down { color: var(--eco-neg); }
+.eco-delta-label {
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--eco-ink3);
+}
+.eco-delta-up .eco-delta-value { color: var(--eco-pos); }
+.eco-delta-down .eco-delta-value { color: var(--eco-neg); }
+.eco-delta-flat .eco-delta-value { color: var(--eco-ink3); }
 
 .eco-links {
   display: flex;
@@ -370,9 +552,9 @@
   align-items: center;
   gap: 3px;
   padding: 4px 9px;
-  border: 1px solid rgba(124, 107, 255, 0.24);
+  border: 1px solid rgba(131, 110, 249, 0.24);
   border-radius: 8px;
-  background: rgba(124, 107, 255, 0.12);
+  background: rgba(131, 110, 249, 0.12);
   color: #d8ceff;
   font-size: 11px;
   font-weight: 500;
@@ -380,7 +562,7 @@
   transition: background 0.16s, border-color 0.16s;
 }
 .eco-link:hover {
-  background: rgba(124, 107, 255, 0.24);
+  background: var(--eco-glow2);
   border-color: var(--eco-line2);
 }
 .eco-link-quiet {
@@ -393,53 +575,68 @@
   background: rgba(255, 255, 255, 0.07);
 }
 
-/* ── featured rail (scale contrast against the dense grid) ───────────────── */
+/* ── leaderboard ─────────────────────────────────────────────────────────── */
 
-.eco-featured {
-  display: grid;
-  /* Fixed column counts rather than auto-fit: with exactly 6 featured cards,
-     auto-fit produced a 5 + 1 wrap at common widths and left a large hole.
-     3 / 2 / 1 columns always divide 6 evenly. The wider cards also give the
-     rail real scale contrast against the dense grid below it. */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+.eco-board-wrap { margin-bottom: 22px; }
+.eco-board-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
 }
-.eco-feature {
-  position: relative;
+.eco-board-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.eco-board-sub {
+  font-size: 11px;
+  color: var(--eco-ink3);
+}
+
+.eco-board {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--eco-line2);
+  border: 1px solid var(--eco-line);
   border-radius: 16px;
-  background: linear-gradient(150deg, rgba(36, 26, 62, 0.78), rgba(16, 11, 30, 0.66));
-  box-shadow: 0 14px 34px rgba(4, 2, 12, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  contain: layout style paint;
+  background: var(--eco-fill);
+  box-shadow: 0 14px 34px rgba(4, 2, 12, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-.eco-feature-rank {
-  position: absolute;
-  top: 12px;
-  right: 14px;
+.eco-row {
+  display: grid;
+  grid-template-columns: 30px 36px minmax(150px, 1.1fr) minmax(90px, 1fr) 54px 92px 148px 30px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  transition: background 0.16s;
+}
+.eco-row + .eco-row { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+.eco-row:hover { background: rgba(131, 110, 249, 0.08); }
+.eco-row-first {
+  background: linear-gradient(90deg, rgba(131, 110, 249, 0.12), rgba(131, 110, 249, 0.02));
+}
+.eco-row-first:hover { background: rgba(131, 110, 249, 0.14); }
+
+.eco-row-rank {
   font-family: var(--eco-mono);
   font-size: 11px;
-  color: rgba(196, 181, 253, 0.3);
+  color: var(--eco-ink3);
+  text-align: right;
 }
-.eco-feature-head {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding-right: 28px;
-}
-.eco-feature-id {
+.eco-row-first .eco-row-rank { color: var(--eco-violet2); }
+.eco-row-id {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   align-items: flex-start;
+  gap: 3px;
 }
-.eco-feature-name {
-  font-size: 15px;
+.eco-row-name {
+  font-size: 13.5px;
   font-weight: 600;
   line-height: 1.15;
   overflow: hidden;
@@ -447,34 +644,61 @@
   white-space: nowrap;
   max-width: 100%;
 }
-.eco-feature-tvl {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.eco-feature-tvl .eco-tvl-value { font-size: 22px; }
-.eco-feature-desc {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--eco-ink2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.eco-row-share {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
   overflow: hidden;
+}
+.eco-row-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(131, 110, 249, 0.5), var(--eco-violet2));
+}
+.eco-row-pct {
+  font-family: var(--eco-mono);
+  font-size: 10.5px;
+  color: var(--eco-ink3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.eco-row-tvl {
+  font-size: 14.5px;
+  text-align: right;
+  cursor: help;
+}
+.eco-row-deltas {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.eco-row-out {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: var(--eco-ink3);
+  transition: color 0.16s, background 0.16s;
+}
+a.eco-row-out:hover {
+  color: var(--eco-ink);
+  background: var(--eco-glow);
 }
 
 /* ── dense grid ──────────────────────────────────────────────────────────── */
 
 .eco-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(214px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
   gap: 9px;
 }
 .eco-card {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding: 12px;
+  padding: 13px;
   border: 1px solid var(--eco-line);
   border-radius: 13px;
   background: var(--eco-fill);
@@ -483,13 +707,15 @@
      windowing library. contain-intrinsic-size stops the scrollbar jumping as
      cards are realized. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 112px;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  contain-intrinsic-size: auto 128px;
+  transition: transform 0.16s ease, border-color 0.16s ease,
+    background 0.16s ease, box-shadow 0.16s ease;
 }
 .eco-card:hover {
   transform: translateY(-2px);
   border-color: var(--eco-line2);
   background: var(--eco-fill2);
+  box-shadow: 0 10px 24px rgba(20, 8, 50, 0.45);
 }
 .eco-card-head {
   display: flex;
@@ -515,29 +741,57 @@
 }
 .eco-card-tvl {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  flex-shrink: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-.eco-card-tvl .eco-tvl-value { font-size: 12.5px; }
+.eco-card-tvl > .eco-tvl-value {
+  font-size: 16px;
+  cursor: help;
+}
+.eco-card-deltas {
+  display: flex;
+  gap: 10px;
+}
+.eco-card-desc {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--eco-ink3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── empty / footer ──────────────────────────────────────────────────────── */
 
 .eco-empty {
-  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 52px 20px;
   text-align: center;
-  color: var(--eco-ink2);
-  font-size: 13px;
 }
-.eco-linkish {
-  border: none;
-  background: none;
-  padding: 0;
+.eco-empty-ring {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--eco-line2);
+  background: var(--eco-glow);
   color: var(--eco-mist);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
+}
+.eco-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.eco-empty-sub {
+  font-size: 12.5px;
+  color: var(--eco-ink2);
+  max-width: 46ch;
 }
 
 .eco-foot {
@@ -565,16 +819,38 @@
 /* ── responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
-  .eco-featured { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Drop the share bar first — the percent label still tells the story. */
+  .eco-row {
+    grid-template-columns: 30px 36px minmax(140px, 1fr) 54px 92px 148px 30px;
+  }
+  .eco-row-share { display: none; }
 }
 
 @media (max-width: 900px) {
-  .eco-hero {
-    grid-template-columns: 1fr;
-    align-items: start;
+  /* minmax(0,1fr), not 1fr: an auto-min track lets the movers metric force
+     the hero wider than the viewport on small screens. */
+  .eco-hero { grid-template-columns: minmax(0, 1fr); }
+  .eco-hero-tvl {
+    align-items: flex-start;
+    text-align: left;
   }
-  .eco-metrics { width: 100%; }
   .eco-metric { flex: 1 1 auto; }
+  /* Fold the deltas under TVL rather than dropping data. */
+  .eco-row {
+    grid-template-columns: 26px 36px minmax(0, 1fr) auto 30px;
+    gap: 10px;
+  }
+  .eco-row-pct { display: none; }
+  .eco-row-deltas {
+    grid-column: 4;
+    grid-row: 2;
+    justify-content: flex-end;
+  }
+  .eco-row-tvl { font-size: 13.5px; }
+  .eco-row > .eco-logo,
+  .eco-row-rank,
+  .eco-row-id,
+  .eco-row-out { grid-row: 1 / span 2; }
 }
 
 @media (max-width: 768px) {
@@ -603,15 +879,36 @@
     flex: 0 0 auto;
     scroll-snap-align: start;
   }
-  .eco-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); }
-  .eco-featured { grid-template-columns: 1fr; }
+  .eco-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
+
+@media (max-width: 420px) {
+  .eco-metrics { gap: 8px; }
+  .eco-metric { min-width: 88px; padding: 9px 11px; }
+  .eco-row {
+    grid-template-columns: 20px 32px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 8px;
+  }
+  /* The whole row's site link survives in the grid cards; the arrow column
+     does not fit beside TVL on a 320px phone. */
+  .eco-row-out { display: none; }
+  .eco-row-deltas .eco-delta:last-child { display: none; }
+  .eco-grid { grid-template-columns: 1fr 1fr; }
+  .eco-card-deltas { gap: 7px; }
+}
+
+@media (max-width: 340px) {
+  .eco-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .eco-card,
-  .eco-spinner-logo,
+  .eco-sk,
+  .eco-live-dot,
   .eco-sort-btn,
   .eco-chip,
+  .eco-mover,
   .eco-link {
     transition: none;
     animation: none;
