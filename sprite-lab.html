@@ -1,0 +1,240 @@
+<!doctype html>
+<!--
+  Dev-only sprite lab. Vite serves root HTML in dev; the production build only
+  takes index.html as an entry, so this never ships.
+
+  Why it exists: the harbour renders inside a requestAnimationFrame loop, which
+  browsers suspend when the tab is hidden. That makes the live scene impossible
+  to inspect in a headless/hidden pane. This page draws every sprite variant
+  synchronously at high zoom, so pixel work can be reviewed from a screenshot.
+
+  Open at: /sprite-lab.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sprite Lab</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0b0718;
+        color: #f4f1ff;
+        font: 13px/1.5 ui-monospace, "JetBrains Mono", monospace;
+      }
+      h1 { font-size: 15px; letter-spacing: .18em; text-transform: uppercase; margin: 0 0 18px; }
+      h2 {
+        font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+        color: #a78bfa; margin: 26px 0 10px; border-bottom: 1px solid #3b2a5f; padding-bottom: 5px;
+      }
+      .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+      .cell { text-align: center; }
+      .cell canvas { image-rendering: pixelated; display: block; background: #171236; }
+      .cell span { display: block; margin-top: 5px; font-size: 10px; color: #a89bc8; }
+      .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+      .sw { width: 62px; }
+      .sw i { display: block; height: 26px; border: 1px solid #0b0718; }
+      .sw span { font-size: 8px; color: #a89bc8; word-break: break-all; }
+    </style>
+  </head>
+  <body>
+    <h1>Sprite Lab</h1>
+    <div id="out"></div>
+
+    <script type="module">
+      import { PAL } from '/src/ship/pixel.js'
+      import {
+        hopliteBodySprite, shipSprite, farShipSprite,
+        templeSprite, altarSprite,
+        hopliteFromTx, shipFromBlock, HOPLITE_W, HOPLITE_H,
+      } from '/src/ship/sprites.js'
+      import { legsSprite, POSES } from '/src/ship/poses.js'
+      import { flameSprite } from '/src/ship/flames.js'
+      import { rankFor, RANK_NAMES } from '/src/ship/ranks.js'
+      import { seaLifeSprite, SPECIES, SEA_LIFE_SIZE } from '/src/ship/seaLife.js'
+
+      const out = document.getElementById('out')
+      const ZOOM = 7
+
+      function section(title) {
+        const h = document.createElement('h2')
+        h.textContent = title
+        out.appendChild(h)
+        const row = document.createElement('div')
+        row.className = 'row'
+        out.appendChild(row)
+        return row
+      }
+
+      /** Blit a source canvas at ZOOM with smoothing off. */
+      function show(row, src, label, zoom = ZOOM) {
+        const cell = document.createElement('div')
+        cell.className = 'cell'
+        const c = document.createElement('canvas')
+        c.width = src.width * zoom
+        c.height = src.height * zoom
+        const ctx = c.getContext('2d')
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(src, 0, 0, c.width, c.height)
+        cell.appendChild(c)
+        const s = document.createElement('span')
+        s.textContent = label
+        cell.appendChild(s)
+        row.appendChild(cell)
+      }
+
+      // ── palette ────────────────────────────────────────────────────────
+      {
+        const h = document.createElement('h2')
+        h.textContent = 'Palette'
+        out.appendChild(h)
+        const wrap = document.createElement('div')
+        wrap.className = 'swatches'
+        for (const [k, v] of Object.entries(PAL)) {
+          if (typeof v !== 'string') continue
+          const d = document.createElement('div')
+          d.className = 'sw'
+          d.innerHTML = `<i style="background:${v}"></i><span>${k}<br>${v}</span>`
+          wrap.appendChild(d)
+        }
+        out.appendChild(wrap)
+      }
+
+      // ── temple ─────────────────────────────────────────────────────────
+      {
+        const row = section('Temple + altar — replaces the anachronistic Pharos')
+        show(row, templeSprite(), `temple ${templeSprite().width}x${templeSprite().height}`, 6)
+        show(row, altarSprite(), `altar ${altarSprite().width}x${altarSprite().height}`, 6)
+      }
+
+      // ── the bridge pod ─────────────────────────────────────────────────
+      {
+        const row = section('Bridge pod — dolphin / orca / whale, 2 swim frames')
+        for (const sp of SPECIES) {
+          for (let f = 0; f < 2; f++) {
+            const sz = SEA_LIFE_SIZE[sp]
+            show(row, seaLifeSprite(sp, f), `${sp} ${sz.w}x${sz.h} f${f}`, 8)
+          }
+        }
+      }
+
+      // ── logo study ─────────────────────────────────────────────────────
+      {
+        const row = section('Monad mark — real PNG downscaled vs hand-pixelled')
+        const img = new Image()
+        img.src = '/monad_logo.png'
+        img.onload = () => {
+          for (const n of [7, 9, 11, 14]) {
+            for (const smooth of [true, false]) {
+              const t = document.createElement('canvas')
+              t.width = n; t.height = n
+              const tx = t.getContext('2d')
+              tx.imageSmoothingEnabled = smooth
+              tx.drawImage(img, 0, 0, n, n)
+              show(row, t, `png ${n}px ${smooth ? 'smooth' : 'hard'}`, Math.max(6, Math.round(90 / n)))
+            }
+          }
+          const MARK = [[2,3,0],[1,5,1],[0,2,2],[5,2,2],[0,2,3],[5,2,3],[0,2,4],[5,2,4],[1,5,5],[2,3,6]]
+          const m = document.createElement('canvas')
+          m.width = 7; m.height = 7
+          const mx = m.getContext('2d')
+          mx.fillStyle = '#836ef9'
+          for (const [x, w, y] of MARK) mx.fillRect(x, y, w, 1)
+          show(row, m, 'HAND 7px (current)', 13)
+        }
+      }
+
+      // ── warriors ───────────────────────────────────────────────────────
+      /**
+       * Compose the real three-layer figure exactly as hopliteRender does:
+       * legs strip, body, flame at (x, y-1). Drawn into an 11x18 canvas with
+       * one row of headroom so an Archon's top pixel is not clipped.
+       */
+      function figure(traits, rank, pose, phase) {
+        const c = document.createElement('canvas')
+        c.width = HOPLITE_W
+        c.height = HOPLITE_H + 1
+        const ctx = c.getContext('2d')
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(legsSprite(pose, traits.whale), 0, 1)
+        ctx.drawImage(hopliteBodySprite(traits), 0, 1)
+        const f = flameSprite(rank, phase)
+        if (f) ctx.drawImage(f, 0, 0)
+        return c
+      }
+
+      const CATS = ['transfer', 'defi', 'nft', 'contractCall', 'contractDeploy', 'other']
+      const mkTraits = (seed, meta) => hopliteFromTx(`0x${seed}${'a'.repeat(40 - seed.length)}`, meta)
+
+      const RANK_META = [
+        ['Unlit (synthetic)', { category: 'transfer', value: 1, gasPrice: 10, gasHigh: 120, gasTop: 400 }, true],
+        ['Ember', { category: 'transfer', value: 1, gasPrice: 40, gasHigh: 120, gasTop: 400 }, false],
+        ['Kindler', { category: 'defi', value: 1, gasPrice: 200, gasHigh: 120, gasTop: 400 }, false],
+        ['Bearer', { category: 'defi', value: 500, gasPrice: 60, gasHigh: 120, gasTop: 400 }, false],
+        ['Archon', { category: 'nft', value: 500, gasPrice: 900, gasHigh: 120, gasTop: 400 }, false],
+      ]
+
+      {
+        const row = section('Rank ladder — the torch is the tell (4 flicker phases each)')
+        RANK_META.forEach(([label, meta, synth], i) => {
+          const t = mkTraits(`r${i}`, meta)
+          const rank = rankFor(t, synth)
+          for (let phase = 0; phase < 4; phase++) {
+            show(row, figure(t, rank, 'stand', phase), `${label} ${RANK_NAMES[rank]}·${phase}`, 7)
+          }
+        })
+      }
+      {
+        const row = section('Poses — the leap arc: brace 16px → tuck 15px → planted 17px')
+        const t = mkTraits('p1', { category: 'defi', value: 500, gasPrice: 60, gasHigh: 120, gasTop: 400 })
+        for (const pose of Object.keys(POSES)) {
+          show(row, figure(t, 3, pose, 1), pose, 8)
+        }
+      }
+      {
+        const row = section('Warriors — by category')
+        CATS.forEach((category, i) => {
+          const t = mkTraits(`c${i}`, { category, value: 1, gasPrice: 50 })
+          show(row, figure(t, 1, 'stand', 2), category)
+        })
+      }
+      {
+        const row = section('Muster — a rank as it reads on the quay (8px pitch)')
+        const c = document.createElement('canvas')
+        c.width = 8 * 15 + 12
+        c.height = HOPLITE_H + 2
+        const ctx = c.getContext('2d')
+        ctx.imageSmoothingEnabled = false
+        for (let i = 0; i < 15; i++) {
+          const meta = RANK_META[i % 5][1]
+          const t = mkTraits(`m${i}`, meta)
+          const rank = rankFor(t, RANK_META[i % 5][2])
+          ctx.drawImage(figure(t, rank, i % 3 === 0 ? 'stepA' : 'stand', i & 3), i * 8, 1)
+        }
+        show(row, c, 'left→right in array order — the later neighbour is always to the RIGHT, which is what keeps the flame in cols 0-2 unoccluded', 4)
+      }
+
+      // ── vessels ────────────────────────────────────────────────────────
+      {
+        const row = section('Vessels — size tiers')
+        for (const size of [0, 1, 2]) {
+          const traits = shipFromBlock({ number: 900000 + size, hash: `0xship${size}`, transactionCount: 50 }, size)
+          show(row, shipSprite(traits), `size ${size}`, 5)
+        }
+      }
+      {
+        const row = section('Vessels — variant spread')
+        for (let i = 0; i < 6; i++) {
+          const traits = shipFromBlock({ number: 800000 + i, hash: `0xv${i}`, transactionCount: 20 }, i % 3)
+          show(row, shipSprite(traits), `#${i}`, 4)
+        }
+      }
+      {
+        const row = section('Far hulls')
+        for (const v of [0, 1, 2]) show(row, farShipSprite(v), `far ${v}`, 6)
+      }
+
+      document.title = 'Sprite Lab · ready'
+    </script>
+  </body>
+</html>

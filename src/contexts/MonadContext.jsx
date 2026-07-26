@@ -23,6 +23,39 @@ import {
 import { BLOCK_TIME_MS } from '../utils/formatters'
 
 // =====================================================
+// BLOCK RECRUITS — the ship's own crew list
+// =====================================================
+/**
+ * Bounded sample of a block's own transactions, attached to the block entry at
+ * fetch time. The harbour's boarding rule — a soldier boards only the ship
+ * whose block contains its transaction — depends on this arriving WITH the
+ * block: the tx flush timer publishes transactions ~130ms after the block
+ * commits, so anything derived from the transactions feed races and loses.
+ * 24 entries ≈ 2KB per block; state growth stays bounded by the block list cap.
+ */
+const RECRUITS_PER_BLOCK = 24
+function buildRecruits(transactions) {
+  const out = []
+  if (!Array.isArray(transactions)) return out
+  for (const tx of transactions) {
+    if (out.length >= RECRUITS_PER_BLOCK) break
+    if (!tx || typeof tx === 'string' || !tx.hash) continue
+    const input = tx.input || '0x'
+    const isDex = (tx.to && KNOWN_DEX_ADDRESSES.has(tx.to.toLowerCase())) ||
+      (input.length >= 10 && SWAP_METHOD_SIGNATURES.has(input.slice(0, 10).toLowerCase()))
+    out.push({
+      hash: tx.hash,
+      // Destination contract: the project-attribution layer keys off this.
+      to: tx.to || null,
+      value: toNumberish(tx.value) / 1e18,
+      gasPrice: toNumberish(tx.gasPrice) / 1e9,
+      category: isDex ? 'defi' : input !== '0x' ? (tx.to ? 'contractCall' : 'contractDeploy') : 'transfer',
+    })
+  }
+  return out
+}
+
+// =====================================================
 // RATE LIMITING & OPTIMIZATION CONSTANTS
 // =====================================================
 const ACTIVE_POLL_INTERVAL = 1500 // HTTP fallback only (WS is primary)
@@ -265,6 +298,9 @@ export const MonadProvider = ({ children }) => {
       gasLimit: blockData.gasLimit,
       networkUtilization: blockData.networkUtilization,
       baseFeePerGas: blockData.baseFeePerGas,
+      /* The block's own crew list and its burnt offering — live data only. */
+      recruits: blockData.recruits || [],
+      burnedMon: blockData.burnedMon || 0,
       miner: blockData.miner,
       proposerId,
       proposerValidator,
@@ -482,6 +518,10 @@ export const MonadProvider = ({ children }) => {
             gasLimit,
             networkUtilization: utilization,
             baseFeePerGas: toNumberish(block.baseFeePerGas),
+            recruits: buildRecruits(block.transactions),
+            // EIP-1559: the base fee is burned. gasUsed x baseFee is the MON
+            // this block destroyed — the altar's offering.
+            burnedMon: (gasUsed * toNumberish(block.baseFeePerGas)) / 1e18,
             // Block producer (miner/author) address
             miner: block.miner || null
           }
@@ -619,7 +659,9 @@ export const MonadProvider = ({ children }) => {
                   gasUsed,
                   gasLimit,
                   networkUtilization: gasLimit > 0 ? (gasUsed / gasLimit) * 100 : 0,
-                  baseFeePerGas: toNumberish(block.baseFeePerGas)
+                  baseFeePerGas: toNumberish(block.baseFeePerGas),
+                  recruits: buildRecruits(block.transactions),
+                  burnedMon: (gasUsed * toNumberish(block.baseFeePerGas)) / 1e18
                 }, proposerPromise)
 
                 // Process transactions

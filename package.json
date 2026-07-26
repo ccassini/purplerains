@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit": "node scripts/audit.mjs"
@@ -40,12 +41,14 @@
   "devDependencies": {
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
+    "@typescript-eslint/parser": "^8.65.0",
     "@vitejs/plugin-react": "^4.1.0",
     "eslint": "^8.53.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
     "terser": "^5.42.0",
+    "typescript": "^5.9.3",
     "vite": "^5.0.0",
     "vitest": "^3.2.7"
   }

@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/world', label: 'World' },
   { to: '/agora-world', label: 'Agora' },
+  { to: '/ship', label: 'Odyssey' },
   { to: '/network', label: 'Network' },
   { to: '/ecosystem', label: 'Ecosystem' },
   { to: '/price', label: 'Price', dividerBefore: true },
@@ -29,6 +30,7 @@ const ROUTE_PREFETCH = {
   '/ecosystem': () => import('../pages/EcosystemVizPage'),
   '/world': () => import('../pages/MonadWorldPage'),
   '/agora-world': () => import('../pages/AgoraWorldPage'),
+  '/ship': () => import('../pages/ShipPage'),
 }
 const prefetched = new Set()
 const prefetchRoute = (to) => {
@@ -46,7 +48,8 @@ const Header = () => {
   const location = useLocation()
   const isWorldPage = location.pathname === '/world' || location.pathname === '/world-3d'
   const isAgoraPage = location.pathname === '/agora-world' || location.pathname === '/agora-world-3d'
-  const shouldRenderHeader = !(isWorldPage || isAgoraPage)
+  const isShipPage = location.pathname === '/ship'
+  const shouldRenderHeader = !(isWorldPage || isAgoraPage || isShipPage)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches

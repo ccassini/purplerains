@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+  Dev-only scene lab. Vite serves root HTML in dev; the production build takes
+  only index.html as an entry, so this never ships.
+
+  Why it exists: the harbour draws inside requestAnimationFrame, and browsers
+  suspend rAF in a hidden tab — so in a headless or backgrounded pane the live
+  canvas never paints even one frame. This page swaps rAF for a manual queue
+  BEFORE starting the engine, then pumps a fixed number of frames with
+  synthetic timestamps. The result is the real engine, the real renderer and a
+  real canvas, rendered deterministically and synchronously.
+
+  Open at: /scene-lab.html?frames=900&blocks=14
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Scene Lab</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #0b0718; color: #f4f1ff;
+             font: 12px/1.5 ui-monospace, "JetBrains Mono", monospace; }
+      h1 { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; margin: 0 0 10px; }
+      #status { color: #a78bfa; margin-bottom: 10px; }
+      canvas { display: block; width: 100%; image-rendering: pixelated; }
+    </style>
+  </head>
+  <body>
+    <h1>Scene Lab</h1>
+    <div id="status">booting…</div>
+    <canvas id="stage"></canvas>
+    <h1 style="margin-top:14px">Magnified — the quay muster</h1>
+    <canvas id="glass"></canvas>
+
+    <script type="module">
+      const params = new URLSearchParams(location.search)
+      const FRAMES = Number(params.get('frames') || 900)
+      const BLOCKS = Number(params.get('blocks') || 14)
+      const STEP_MS = 16
+
+      // ── swap rAF for a manual queue BEFORE the engine is created ────────
+      let queued = null
+      const realRaf = window.requestAnimationFrame
+      window.requestAnimationFrame = (cb) => { queued = cb; return 1 }
+      window.cancelAnimationFrame = () => { queued = null }
+      // The engine skips drawing while the document is hidden; in this pane it
+      // always is, so report visible for the duration of the pump.
+      Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true })
+      Object.defineProperty(document, 'hidden', { get: () => false, configurable: true })
+
+      const { createShipEngine } = await import('/src/ship/engine.js')
+
+      const canvas = document.getElementById('stage')
+      canvas.style.height = '360px'
+      // The hidden pane reports a ~1px rect even at load, which would collapse
+      // the render target to 2x720. The lab already stubs rAF and visibility;
+      // stub the rect too so the surface always sizes like a real viewport.
+      Object.defineProperty(canvas, 'clientWidth', { get: () => 1280 })
+      Object.defineProperty(canvas, 'clientHeight', { get: () => 360 })
+      // Pointer mapping reads the rect; the hidden pane reports width 0.
+      canvas.getBoundingClientRect = () => (
+        { left: 0, top: 0, right: 1280, bottom: 360, width: 1280, height: 360 }
+      )
+      const engine = createShipEngine(canvas)
+      engine.start()
+
+      const CATS = ['transfer', 'defi', 'nft', 'contractCall', 'contractDeploy', 'other']
+      const hex = (n) => {
+        let s = '0x'
+        for (let i = 0; i < 40; i++) s += ((n * 7 + i * 13) % 16).toString(16)
+        return s
+      }
+
+      /**
+       * Deterministic feed. Gas prices span the percentile window so every rank
+       * appears, including the rare Archon (high value AND top gas).
+       */
+      let seq = 0
+      function pushTx(kind) {
+        seq++
+        const base = { hash: hex(seq), category: CATS[seq % CATS.length] }
+        if (kind === 'archon') return engine.pushMon({ ...base, value: 500, gasPrice: 4000 })
+        if (kind === 'bearer') return engine.pushMon({ ...base, value: 500, gasPrice: 60 })
+        if (kind === 'kindler') return engine.pushMon({ ...base, value: 1, gasPrice: 260 })
+        return engine.pushMon({ ...base, value: 1, gasPrice: 40 + (seq % 30) })
+      }
+
+      // Seed the gas window so p90/p99 are meaningful before the rare ranks.
+      for (let i = 0; i < 60; i++) pushTx('common')
+
+      let frame = 0
+      let blocksPushed = 0
+      function pump() {
+        const ts = frame * STEP_MS
+        // Feed transactions continuously and a block every ~20 frames.
+        if (frame % 3 === 0) {
+          const r = frame % 31
+          pushTx(r === 0 ? 'archon' : r === 7 ? 'bearer' : r === 13 ? 'kindler' : 'common')
+        }
+        if (frame % 20 === 0 && blocksPushed < BLOCKS) {
+          blocksPushed++
+          const txCount = 6 + (blocksPushed * 37) % 900
+          // The live contract: blocks arrive with their own recruit list, and
+          // only those hashes may board. Reuse recently pushed quay hashes for
+          // some recruits so the mempool->block boarding path exercises too.
+          const recruits = []
+          for (let r = 0; r < Math.min(24, txCount); r++) {
+            recruits.push({
+              hash: r < 6 ? hex(seq - r) : hex(100000 + blocksPushed * 100 + r),
+              value: r === 2 ? 500 : 1,
+              gasPrice: r === 3 ? 900 : 50,
+              category: CATS[r % CATS.length],
+            })
+          }
+          engine.pushVessel({
+            number: 90000000 + blocksPushed,
+            hash: hex(1000 + blocksPushed),
+            transactionCount: txCount,
+            fillPct: 3 + (blocksPushed * 9) % 40,
+            hashes: [],
+            recruits,
+            burnedMon: 0.1 + (blocksPushed % 7) * 0.15,
+          })
+        }
+        const cb = queued
+        queued = null
+        if (cb) cb(ts)
+        frame++
+      }
+
+      // Pump in chunks so the page stays responsive and the canvas commits.
+      while (frame < FRAMES) pump()
+
+      const snap = engine.getSnapshot()
+      document.getElementById('status').textContent =
+        `pumped ${frame} frames · blocks ${snap.stats.blocks} · on quay ${snap.stats.queued} · ` +
+        `aboard ${snap.stats.aboard} · sailed ${snap.stats.sailed} · berths ` +
+        snap.berths.filter(Boolean).map((b) => `${b.boarded}/${b.load}`).join(' ')
+      // Freeze the finished frame into a plain <img> IMMEDIATELY, while the
+      // canvas still has its load-time size. Hidden-pane compositors drop
+      // canvas layers and the ResizeObserver later collapses the buffer to the
+      // 0-sized rect a hidden pane reports — a DOM image survives both.
+      {
+        const still = document.createElement('img')
+        still.id = 'still'
+        still.style.cssText = 'display:block;width:100%;image-rendering:pixelated'
+        still.src = canvas.toDataURL()
+        canvas.insertAdjacentElement('afterend', still)
+      }
+
+      document.title = 'Scene Lab · ready'
+      window.__engine = engine
+      window.__pump = pump
+      // The rAF shim is NEVER restored: this page exists precisely because the
+      // real rAF is suspended in a hidden pane, and restoring it after the
+      // first burst silently orphans the engine's next frame registration —
+      // every later pump then finds an empty queue and draws nothing.
+
+      /**
+       * Magnify a strip of the stage so pixel-level work (torch height, pose,
+       * flame hue) can be judged from a screenshot.
+       */
+      const glass = document.getElementById('glass')
+      const ZOOM = 5
+      function magnify(sx, sy, sw, sh) {
+        // Resize only when the crop actually changes: writing style.width on
+        // every tick retriggers the ResizeObserver, which clears the stage
+        // mid-copy and produces intermittent blank frames.
+        if (glass.width !== sw * ZOOM || glass.height !== sh * ZOOM) {
+          glass.width = sw * ZOOM
+          glass.height = sh * ZOOM
+          glass.style.width = Math.min(1560, sw * ZOOM) + 'px'
+        }
+        const g = glass.getContext('2d')
+        g.imageSmoothingEnabled = false
+        g.clearRect(0, 0, glass.width, glass.height)
+        g.drawImage(canvas, sx, sy, sw, sh, 0, 0, glass.width, glass.height)
+      }
+      window.__magnify = magnify
+
+      /**
+       * The ResizeObserver fires after layout and sets canvas.width, which
+       * clears the canvas — so a single pump can be wiped before it is seen.
+       * Keep the rAF shim installed and re-pump on a timer (timers still run in
+       * a hidden tab), so the stage always holds a recent frame.
+       */
+      // Crop is URL-driven so a review is one navigation:
+      //   ?cx=0.7&cy=0.14&cw=0.3&chpx=190&z=4   (fractions of the stage; chpx in px)
+      const cx = Number(params.get('cx') ?? 0)
+      const cy = Number(params.get('cy') ?? 0.30)
+      const cw = Number(params.get('cw') ?? 0.32)
+      const chpx = Number(params.get('chpx') ?? 90)
+      setInterval(() => {
+        for (let i = 0; i < 4; i++) pump()
+        magnify(
+          Math.round(canvas.width * cx),
+          Math.round(canvas.height * cy),
+          Math.round(canvas.width * cw),
+          chpx,
+        )
+      }, 250)
+    </script>
+  </body>
+</html>

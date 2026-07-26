@@ -1,356 +1,366 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { motion } from 'framer-motion'
-import MeteorShower from '../components/MeteorShower'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowUpRight, ExternalLink, Search, X } from 'lucide-react'
+import { fetchMonadEcosystem, formatTvlCompact, formatChangePct } from '../utils/ecosystemApi'
 import { logger } from '../utils/logger'
 import './EcosystemVizPage.css'
 
-const ORBIT_COUNT_DESKTOP = 14
-const ORBIT_COUNT_MOBILE = 5
-const ORBIT_DURATIONS = ['52s', '58s', '48s', '55s', '50s', '54s', '47s', '53s', '49s', '56s', '51s', '57s', '46s', '60s']
-const ORBIT_DIRECTIONS = ['normal', 'reverse', 'normal', 'reverse', 'normal', 'reverse', 'normal', 'reverse', 'normal', 'reverse', 'normal', 'reverse', 'normal', 'reverse']
-const DOT_SIZE_DESKTOP = 36
-const DOT_SIZE_MOBILE = 26
-const MIN_DISTANCE_DESKTOP = 16
-const MIN_DISTANCE_MOBILE = 26
-const MAX_PROJECTS_MOBILE = 16
+const SORTS = [
+  { id: 'tvl', label: 'TVL' },
+  { id: 'name', label: 'A–Z' },
+]
+const FEATURED_COUNT = 6
 
-// Projects to show near center (inner orbits)
-const CENTER_PROJECT_NAMES = ['kizzy', 'kuru exchange', 'uniswap', 'curvance', 'fastlane', 'perpl', 'mace', 'backpack', 'monorail', 'lumiterra']
+/**
+ * Logo with a two-step fallback: our curated artwork, then DefiLlama's icon,
+ * then a monogram. The 200+ logos come from two sources of differing
+ * completeness, so a broken image would otherwise leave a visible hole.
+ */
+function ProjectLogo({ project, size }) {
+  const [step, setStep] = useState(0)
+  const candidates = [project.logo, project.logoFallback].filter(Boolean)
+  const src = candidates[step]
 
-function filenameToName(filename) {
-  if (!filename || typeof filename !== 'string') return ''
-  const lastDot = filename.lastIndexOf('.')
-  if (lastDot === -1) return filename.trim()
-  return filename.slice(0, lastDot).trim()
-}
+  if (!src) {
+    return (
+      <span
+        className="eco-logo eco-logo-mono"
+        style={{ '--eco-logo-size': `${size}px` }}
+        aria-hidden="true"
+      >
+        {(project.name || '?').trim().charAt(0).toUpperCase()}
+      </span>
+    )
+  }
 
-function normalizeProjects(list) {
-  if (!Array.isArray(list)) return []
-  return list.map((item) => {
-    if (item && typeof item === 'object' && item.filename) {
-      return {
-        filename: item.filename,
-        name: item.name ?? filenameToName(item.filename),
-        website: typeof item.website === 'string' ? item.website.trim() : ''
-      }
-    }
-    if (typeof item === 'string' && item) {
-      return { filename: item, name: filenameToName(item), website: '' }
-    }
-    return null
-  }).filter(Boolean)
-}
-
-function EcosystemVizPage() {
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [hoveredProject, setHoveredProject] = useState(null)
-  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 })
-  const hoverTimeoutRef = useRef(null)
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+  return (
+    <img
+      className="eco-logo"
+      style={{ '--eco-logo-size': `${size}px` }}
+      src={src}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      onError={() => setStep((s) => s + 1)}
+    />
   )
+}
 
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)')
-    const handle = () => setIsMobile(mq.matches)
-    mq.addEventListener('change', handle)
-    return () => mq.removeEventListener('change', handle)
-  }, [])
+function ChangeBadge({ value }) {
+  const text = formatChangePct(value)
+  if (!text) return null
+  const dir = Number(value) >= 0 ? 'up' : 'down'
+  return <span className={`eco-change eco-change-${dir}`}>{text}</span>
+}
+
+function ProjectLinks({ project }) {
+  return (
+    <div className="eco-links">
+      {project.website && (
+        <a
+          className="eco-link"
+          href={project.website}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${project.name} website`}
+        >
+          Site <ArrowUpRight size={12} aria-hidden="true" />
+        </a>
+      )}
+      {project.twitter && (
+        <a
+          className="eco-link eco-link-quiet"
+          href={`https://x.com/${project.twitter}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${project.name} on X`}
+        >
+          X
+        </a>
+      )}
+      {project.defiLlamaSlug && (
+        <a
+          className="eco-link eco-link-quiet"
+          href={`https://defillama.com/protocol/${project.defiLlamaSlug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${project.name} TVL on DefiLlama`}
+        >
+          TVL <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+function FeaturedCard({ project, rank }) {
+  const tvl = formatTvlCompact(project.tvl)
+  return (
+    <article className="eco-feature">
+      <span className="eco-feature-rank" aria-hidden="true">{String(rank).padStart(2, '0')}</span>
+      <div className="eco-feature-head">
+        <ProjectLogo project={project} size={44} />
+        <div className="eco-feature-id">
+          <h3 className="eco-feature-name">{project.name}</h3>
+          {project.category && <span className="eco-cat">{project.category}</span>}
+        </div>
+      </div>
+      {tvl && (
+        <div className="eco-feature-tvl">
+          <span className="eco-tvl-value">{tvl}</span>
+          <ChangeBadge value={project.change1d} />
+        </div>
+      )}
+      {project.description && <p className="eco-feature-desc">{project.description}</p>}
+      <ProjectLinks project={project} />
+    </article>
+  )
+}
+
+function ProjectCard({ project }) {
+  const tvl = formatTvlCompact(project.tvl)
+  return (
+    <article className="eco-card">
+      <div className="eco-card-head">
+        <ProjectLogo project={project} size={34} />
+        <div className="eco-card-id">
+          <h3 className="eco-card-name" title={project.name}>{project.name}</h3>
+          {project.category ? (
+            <span className="eco-cat">{project.category}</span>
+          ) : (
+            <span className="eco-cat eco-cat-muted">Ecosystem</span>
+          )}
+        </div>
+        {tvl && (
+          <div className="eco-card-tvl">
+            <span className="eco-tvl-value">{tvl}</span>
+            <ChangeBadge value={project.change1d} />
+          </div>
+        )}
+      </div>
+      <ProjectLinks project={project} />
+    </article>
+  )
+}
+
+export default function EcosystemVizPage() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
+  const [sort, setSort] = useState('tvl')
+  const searchRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
-    // Try project list with websites first; fallback to image list only
-    fetch('/data/ecosystemProjects.json', { headers: { Accept: 'application/json' } })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .catch(() => fetch('/data/ecosystemImages.json', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : [])))
-      .then((list) => (cancelled ? [] : normalizeProjects(Array.isArray(list) ? list : [])))
-      .then((normalized) => {
-        if (!cancelled) setProjects(normalized)
+    fetchMonadEcosystem()
+      .then((result) => {
+        if (!cancelled) setData(result)
       })
-      .catch((err) => logger.error('EcosystemVizPage: load list', err))
+      .catch((err) => {
+        logger.error('EcosystemVizPage: load failed', err)
+        if (!cancelled) setError(err?.message || 'Failed to load ecosystem data')
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
   }, [])
 
-  const { sortedProjects, orbits } = useMemo(() => {
-    if (projects.length === 0) return { sortedProjects: [], orbits: [] }
-    const orbitCount = isMobile ? ORBIT_COUNT_MOBILE : ORBIT_COUNT_DESKTOP
-    const minDist = isMobile ? MIN_DISTANCE_MOBILE : MIN_DISTANCE_DESKTOP
-    // Put center projects first (they get placed on inner orbits)
-    const sorted = [...projects].sort((a, b) => {
-      const aName = (a.name || '').toLowerCase()
-      const bName = (b.name || '').toLowerCase()
-      const aCenter = CENTER_PROJECT_NAMES.some((n) => aName.includes(n) || n.includes(aName))
-      const bCenter = CENTER_PROJECT_NAMES.some((n) => bName.includes(n) || n.includes(bName))
-      if (aCenter && !bCenter) return -1
-      if (!aCenter && bCenter) return 1
-      return 0
-    })
-    const capped = isMobile ? sorted.slice(0, MAX_PROJECTS_MOBILE) : sorted
-    const list = []
-    let projectIndex = 0
-    const innerRadius = isMobile ? 28 : 22
-    const outerRadius = 95
-    const radiusStep = (outerRadius - innerRadius) / Math.max(orbitCount - 1, 1)
-    const placed = []
+  const projects = data?.projects ?? []
 
-    const hasCollision = (x, y) => {
-      for (const p of placed) {
-        const dx = x - p.x
-        const dy = y - p.y
-        if (Math.sqrt(dx * dx + dy * dy) < minDist) return true
-      }
-      return false
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    let list = projects
+    if (category === 'defi') list = list.filter((p) => Number(p.tvl) > 0)
+    else if (category !== 'all') list = list.filter((p) => (p.category || 'Other') === category)
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.category || '').toLowerCase().includes(q) ||
+          (p.description || '').toLowerCase().includes(q)
+      )
     }
+    if (sort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name))
+    // 'tvl' order is already applied by fetchMonadEcosystem.
+    return list
+  }, [projects, query, category, sort])
 
-    for (let o = 0; o < orbitCount; o++) {
-      const radius = innerRadius + o * radiusStep
-      const circumference = 2 * Math.PI * radius
-      const maxPerOrbit = Math.floor(circumference / minDist)
-      const remainingOrbits = orbitCount - o
-      const remaining = capped.length - projectIndex
-      let orbitSize = o === orbitCount - 1
-        ? Math.min(remaining, maxPerOrbit)
-        : Math.min(Math.ceil(remaining / remainingOrbits), maxPerOrbit)
-      orbitSize = Math.min(orbitSize, remaining)
+  // The featured rail only makes sense on the unfiltered, TVL-ordered view.
+  const isDefaultView = category === 'all' && sort === 'tvl' && !query.trim()
+  const featured = isDefaultView ? filtered.slice(0, FEATURED_COUNT) : []
+  const rest = isDefaultView ? filtered.slice(FEATURED_COUNT) : filtered
 
-      const dots = []
-      const baseAngles = []
-      for (let i = 0; i < orbitSize; i++) {
-        baseAngles.push((i / orbitSize) * Math.PI * 2)
-      }
-      const orbitPhase = (o * Math.PI) / (orbitCount * 6)
+  const stats = data?.stats
+  const totalTvl = formatTvlCompact(stats?.totalTvl)
 
-      for (let i = 0; i < orbitSize && projectIndex < capped.length; i++) {
-        let angle = baseAngles[i] + orbitPhase
-        let attempts = 0
-        let placedDot = false
-        while (!placedDot && attempts < 100) {
-          const x = 100 + radius * Math.cos(angle)
-          const y = 100 + radius * Math.sin(angle)
-          if (!hasCollision(x, y)) {
-            dots.push({
-              globalIndex: projectIndex,
-              angleOffset: angle,
-              radius
-            })
-            placed.push({ x, y })
-            placedDot = true
-            projectIndex++
-          } else {
-            const step = (Math.PI * 2) / (orbitSize * 12)
-            const dir = attempts % 2 === 0 ? 1 : -1
-            angle += step * dir * Math.ceil(attempts / 2)
-            angle = ((angle % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2)
-            attempts++
-          }
-        }
-      }
-      if (dots.length > 0) list.push({ radius, dots })
-    }
-    return { sortedProjects: capped, orbits: list }
-  }, [projects, isMobile])
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-    }
+  const handleClear = useCallback(() => {
+    setQuery('')
+    searchRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    let hideTimeout = null
-    let retryTimeout = null
-    const setupHeader = () => {
-      const header = document.querySelector('.app-header.header-hover-hidden')
-      if (!header) {
-        retryTimeout = setTimeout(setupHeader, 100)
-        return
-      }
-      const handleMouseMove = () => {
-        if (hideTimeout) {
-          clearTimeout(hideTimeout)
-          hideTimeout = null
-        }
-        header.classList.add('header-show')
-        header.classList.remove('header-hide')
-        hideTimeout = setTimeout(() => {
-          header.classList.add('header-hide')
-          header.classList.remove('header-show')
-          hideTimeout = null
-        }, 2000)
-      }
-      header.classList.add('header-hide')
-      header.classList.remove('header-show')
-      document.addEventListener('mousemove', handleMouseMove)
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        if (hideTimeout) clearTimeout(hideTimeout)
-      }
-    }
-    const cleanup = setupHeader()
-    return () => {
-      if (retryTimeout) clearTimeout(retryTimeout)
-      if (cleanup) cleanup()
-    }
-  }, [])
+  if (loading) {
+    return (
+      <div className="eco">
+        <div className="eco-center">
+          <img src="/monad_logo.png" alt="" className="eco-spinner-logo" width={56} height={56} />
+          <p>Loading Monad ecosystem…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !projects.length) {
+    return (
+      <div className="eco">
+        <div className="eco-center">
+          <p className="eco-error">{error}</p>
+          <button className="eco-retry" onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="ecosystem-viz-page" style={{ background: '#0a0a0f' }}>
-      <div className="ecosystem-viz-bg-text" aria-hidden="true">
-        Ecosystem
+    <div className="eco">
+      <div className="eco-backdrop" aria-hidden="true" />
+
+      <header className="eco-hero">
+        <div className="eco-hero-text">
+          <p className="eco-eyebrow">Monad Mainnet</p>
+          <h1 className="eco-title">Ecosystem</h1>
+          <p className="eco-lede">
+            Every project building on Monad, with live DeFi TVL from DefiLlama.
+          </p>
+        </div>
+
+        <dl className="eco-metrics">
+          <div className="eco-metric eco-metric-lead">
+            <dt>Total DeFi TVL</dt>
+            <dd>{totalTvl ?? '—'}</dd>
+          </div>
+          <div className="eco-metric">
+            <dt>Projects</dt>
+            <dd>{stats?.total ?? 0}</dd>
+          </div>
+          <div className="eco-metric">
+            <dt>With live TVL</dt>
+            <dd>{stats?.defiCount ?? 0}</dd>
+          </div>
+          <div className="eco-metric">
+            <dt>Categories</dt>
+            <dd>{stats?.categories?.length ?? 0}</dd>
+          </div>
+        </dl>
+
+        {!data?.hasDefiData && (
+          <p className="eco-notice">
+            Live TVL is unavailable right now — showing the project directory only.
+          </p>
+        )}
+      </header>
+
+      <div className="eco-controls">
+        <div className="eco-search">
+          <Search size={15} className="eco-search-icon" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search projects, categories…"
+            aria-label="Search ecosystem projects"
+            className="eco-search-input"
+          />
+          {query && (
+            <button className="eco-search-clear" onClick={handleClear} aria-label="Clear search">
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        <div className="eco-sort" role="group" aria-label="Sort projects">
+          {SORTS.map((s) => (
+            <button
+              key={s.id}
+              className={`eco-sort-btn${sort === s.id ? ' is-active' : ''}`}
+              aria-pressed={sort === s.id}
+              onClick={() => setSort(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {loading ? (
-        <div className="ecosystem-viz-loading" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
-            <img src="/monad_logo.png" alt="Monad" className="ecosystem-viz-loading-logo" />
-            <p>Loading ecosystem...</p>
-          </motion.div>
-        </div>
-      ) : !sortedProjects.length ? (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem' }}>
-          <img src="/monad_logo.png" alt="Monad" style={{ width: '64px', height: '64px' }} />
-          <p style={{ color: '#a0a0a0' }}>No ecosystem images found.</p>
-        </div>
-      ) : (
-        <div className="ecosystem-viz-container">
-          <MeteorShower burnRadiusRatio={0.44} spawnInterval={400} maxMeteors={16} />
-
-          <svg className="ecosystem-viz-orbits" viewBox="0 0 200 200">
-            {orbits.map((orbit, oi) => (
-              <circle
-                key={oi}
-                cx="100"
-                cy="100"
-                r={orbit.radius}
-                className="ecosystem-viz-orbit-circle"
-              />
-            ))}
-          </svg>
-
-          {orbits.map((orbit, oi) => (
-            <div
-              key={oi}
-              className="ecosystem-viz-orbit-group"
-              style={{
-                animationDuration: ORBIT_DURATIONS[oi] || '50s',
-                animationDirection: ORBIT_DIRECTIONS[oi] || 'normal'
-              }}
-            >
-              {orbit.dots.map((dot) => {
-                const project = sortedProjects[dot.globalIndex]
-                const filename = project?.filename ?? ''
-                const name = project?.name ?? filenameToName(filename)
-                const website = project?.website ?? ''
-                const imgSrc = `/ecosystem/${encodeURIComponent(filename)}`
-                const radiusPercent = (dot.radius / 100) * 50
-                const x = 50 + radiusPercent * Math.cos(dot.angleOffset)
-                const y = 50 + radiusPercent * Math.sin(dot.angleOffset)
-
-                const handleMouseEnter = (e) => {
-                  if (hoverTimeoutRef.current) {
-                    clearTimeout(hoverTimeoutRef.current)
-                    hoverTimeoutRef.current = null
-                  }
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  let tx = rect.left + rect.width / 2
-                  let ty = rect.top - 10
-                  const tw = 220
-                  const th = 60
-                  const pad = 10
-                  if (tx < tw / 2 + pad) tx = tw / 2 + pad
-                  else if (tx > window.innerWidth - tw / 2 - pad) tx = window.innerWidth - tw / 2 - pad
-                  if (ty < th + pad) ty = rect.bottom + 10
-                  setHoverPosition({ x: tx, y: ty })
-                  setHoveredProject({ name, website })
-                }
-
-                const handleMouseLeave = () => {
-                  hoverTimeoutRef.current = setTimeout(() => setHoveredProject(null), 100)
-                }
-
-                const handleClick = (e) => {
-                  e.stopPropagation()
-                  if (website) {
-                    const url = website.startsWith('http://') || website.startsWith('https://') ? website : `https://${website}`
-                    window.open(url, '_blank', 'noopener,noreferrer')
-                  }
-                }
-
-                const dotSize = isMobile ? 44 : DOT_SIZE_DESKTOP
-                return (
-                  <div
-                    key={dot.globalIndex}
-                    className={`ecosystem-viz-dot ${isMobile ? 'ecosystem-viz-dot-mobile' : ''}`}
-                    style={{
-                      left: `${x}%`,
-                      top: `${y}%`,
-                      width: `${dotSize}px`,
-                      height: `${dotSize}px`,
-                      transform: 'translate(-50%, -50%)',
-                      cursor: website ? 'pointer' : 'default'
-                    }}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
-                    onClick={handleClick}
-                    role={website ? 'link' : undefined}
-                    aria-label={website ? `${name} - Visit website` : name}
-                  >
-                    <img
-                      src={imgSrc}
-                      alt={name}
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                        const fallback = e.target.nextElementSibling
-                        if (fallback) fallback.style.display = 'flex'
-                      }}
-                    />
-                    <span className="ecosystem-viz-dot-fallback" style={{ display: 'none' }} aria-hidden="true" />
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-
-          <div className="ecosystem-viz-center">
-            <motion.div
-              className="ecosystem-viz-logo-wrap"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1, rotate: 360 }}
-              transition={{
-                scale: { duration: 0.6, ease: 'easeOut' },
-                opacity: { duration: 0.6 },
-                rotate: { duration: 20, repeat: Infinity, ease: 'linear' }
-              }}
-              onClick={() => window.open('https://www.monad.xyz', '_blank', 'noopener,noreferrer')}
-              style={{ cursor: 'pointer' }}
-            >
-              <img src="/monad_logo.png" alt="Monad" className="ecosystem-viz-logo" />
-            </motion.div>
-          </div>
-        </div>
-      )}
-
-      {hoveredProject && (
-        <div
-          className="ecosystem-viz-tooltip"
-          style={{
-            left: `${hoverPosition.x}px`,
-            top: `${hoverPosition.y}px`,
-            transform: 'translate(-50%, -100%)'
-          }}
+      <nav className="eco-cats" aria-label="Filter by category">
+        <button
+          className={`eco-chip${category === 'all' ? ' is-active' : ''}`}
+          aria-pressed={category === 'all'}
+          onClick={() => setCategory('all')}
         >
-          <div className="ecosystem-viz-tooltip-content">
-            <div className="ecosystem-viz-tooltip-name">{hoveredProject.name}</div>
-          </div>
-          <div className="ecosystem-viz-tooltip-arrow" />
-        </div>
+          All <span className="eco-chip-n">{stats?.total ?? 0}</span>
+        </button>
+        <button
+          className={`eco-chip${category === 'defi' ? ' is-active' : ''}`}
+          aria-pressed={category === 'defi'}
+          onClick={() => setCategory('defi')}
+        >
+          Has TVL <span className="eco-chip-n">{stats?.defiCount ?? 0}</span>
+        </button>
+        {(stats?.categories ?? []).map((c) => (
+          <button
+            key={c.name}
+            className={`eco-chip${category === c.name ? ' is-active' : ''}`}
+            aria-pressed={category === c.name}
+            onClick={() => setCategory(c.name)}
+          >
+            {c.name} <span className="eco-chip-n">{c.count}</span>
+          </button>
+        ))}
+      </nav>
+
+      {featured.length > 0 && (
+        <section className="eco-featured" aria-label="Largest protocols by TVL">
+          {featured.map((p, i) => (
+            <FeaturedCard key={p.id} project={p} rank={i + 1} />
+          ))}
+        </section>
       )}
+
+      <section className="eco-grid" aria-label="All ecosystem projects">
+        {rest.map((p) => (
+          <ProjectCard key={p.id} project={p} />
+        ))}
+      </section>
+
+      {filtered.length === 0 && (
+        <p className="eco-empty">
+          No projects match your filters.{' '}
+          <button className="eco-linkish" onClick={() => { setQuery(''); setCategory('all') }}>
+            Reset
+          </button>
+        </p>
+      )}
+
+      <footer className="eco-foot">
+        <span>{filtered.length} of {stats?.total ?? 0} shown</span>
+        {data?.updatedAt && (
+          <span>
+            TVL via{' '}
+            <a href="https://defillama.com/chain/Monad" target="_blank" rel="noopener noreferrer">
+              DefiLlama
+            </a>
+            {' · updated '}
+            {new Date(data.updatedAt).toLocaleString()}
+            {!data.live && ' (snapshot)'}
+          </span>
+        )}
+      </footer>
     </div>
   )
 }
-
-export default EcosystemVizPage

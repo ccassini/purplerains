@@ -1,0 +1,758 @@
+/* ========================================================
+   Monad Harbor — pixel-art mempool dock
+
+   The chrome deliberately imitates the canvas rather than floating above it:
+   hard 2px edges, no rounded corners, offset black shadows instead of blur,
+   and a bitmap-ish display face for every number. Anything that would read as
+   "modern web UI" (glass, gradients on panels, soft radii) is avoided so the
+   overlays feel painted into the same scene as the sprites.
+
+   The page is its own fixed layer because the app shell locks document scroll
+   (body / #root / .app are all overflow:hidden).
+   ======================================================== */
+
+.hb {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  background: #0b0718;
+  color: var(--hb-ink);
+  font-family: var(--hb-display);
+  -webkit-font-smoothing: none;
+
+  /* ══ TIER 1 · MATERIAL — selectors must never reference these ══════════ */
+  --pr-night: #0b0718; --pr-abyss: #050310;
+  --pr-marble-100: #f4f1ff; --pr-marble-200: #efe6ff;
+  --pr-marble-300: #cfc6e6; --pr-marble-500: #a396c4; --pr-marble-600: #8b7fae;
+  --pr-bronze-800: #3a2412; --pr-bronze-700: #6e4a20; --pr-bronze-500: #c98b3f;
+  --pr-bronze-300: #f0c27b; --pr-bronze-200: #f5c97a;
+  --pr-gold-500: #fcd34d; --pr-gold-200: #fff3d6; --pr-beacon-300: #e9d5ff;
+  --pr-white: #fbfaf9;
+  --pr-violet-500: #836ef9; --pr-violet-400: #a78bfa; --pr-stone-500: #7c6e96;
+  --pr-timber-700: #2a1a10;
+  --pr-wine-400: #d1568c; --pr-blood-400: #e8697a; --pr-laurel-400: #9dba63;
+
+  /* ══ TIER 2 · SEMANTIC — the only tier selectors may use ═══════════════ */
+  --hb-night: var(--pr-night);
+  --hb-panel: rgba(14, 9, 30, 0.96);
+  --hb-recess: rgba(5, 3, 16, 0.82);
+
+  --hb-frame: var(--pr-bronze-500);
+  --hb-frame-lit: var(--pr-bronze-300);
+  --hb-frame-dark: var(--pr-bronze-800);
+  --hb-edge: var(--pr-bronze-500);
+  --hb-edge-dim: rgba(201, 139, 63, 0.32);
+  --hb-shadow: 5px 6px 0 rgba(4, 2, 11, 0.84);
+  --hb-shadow-sm: 3px 4px 0 rgba(4, 2, 11, 0.84);
+
+  --hb-ink: var(--pr-marble-100);
+  --hb-dim: var(--pr-marble-300);
+  /* Was rgba(168,155,200,.62) — 3.5:1, failing AA on every metric label. */
+  --hb-faint: var(--pr-marble-500);
+  --hb-quiet: var(--pr-marble-600);
+
+  --hb-numeral-hero: var(--pr-marble-200);
+  --hb-violet: var(--pr-violet-400);
+  --hb-cyan: var(--pr-violet-400);
+  --hb-orchid: var(--pr-wine-400);
+  --hb-gold: var(--pr-gold-500);
+  --hb-capacity: var(--pr-gold-500);
+  --hb-demand: var(--pr-stone-500);
+  --hb-sailed: var(--pr-laurel-400);
+  --hb-lost: var(--pr-blood-400);
+  --hb-live: var(--pr-laurel-400);
+  --hb-false: var(--pr-blood-400);
+
+  --hb-rank-0: var(--pr-marble-600);
+  --hb-rank-1: var(--pr-bronze-300);
+  --hb-rank-2: var(--pr-gold-500);
+  --hb-rank-3: var(--pr-gold-200);
+  --hb-rank-4: var(--pr-beacon-300);
+
+  /* Vertical 1px tooling only. A diagonal 1px stop antialiases by construction
+     and produces exactly the soft artefact this file bans. */
+  --hb-tooled: repeating-linear-gradient(90deg,
+      rgba(244, 241, 255, 0.030) 0 1px, rgba(0, 0, 0, 0) 1px 3px);
+  /* Greek key, drawn on a 16x8 pixel grid with crispEdges — no curve, no blur. */
+  --hb-meander: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='8' shape-rendering='crispEdges'%3E%3Cg fill='%23c98b3f'%3E%3Crect width='16' height='2'/%3E%3Crect x='12' y='2' width='2' height='2'/%3E%3Crect x='2' y='4' width='12' height='2'/%3E%3Crect x='2' y='6' width='2' height='2'/%3E%3C/g%3E%3C/svg%3E");
+
+  --sp-1: 2px; --sp-2: 4px; --sp-3: 6px; --sp-4: 8px;
+  --sp-5: 11px; --sp-6: 14px; --sp-7: 18px; --sp-8: 24px;
+  --rule: 2px;
+
+  --hb-display: 'VT323', 'Courier New', ui-monospace, monospace;
+  --hb-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+}
+
+.hb-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  /* Keep the upscale crisp; the buffer is already the art's true resolution. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Shared panel treatment. */
+/*
+ * THE CARVED PLAQUE — the whole chrome redesign in one rule.
+ *
+ * Depth comes from three hard cues and exactly three: a 2px bronze bevel (lit
+ * upper-left, shade lower-right), a 2px incision fillet whose light is
+ * INVERTED relative to the bevel — which is what makes the field read as cut
+ * INTO the stone rather than raised off it — and a hard offset cast shadow.
+ * Zero blur, zero radius, zero soft gradient: the canvas beside it physically
+ * cannot blur, so the chrome must not either.
+ *
+ * `background-color` + `background-image`, never the `background` shorthand:
+ * the shorthand resets background-image and would silently kill the tooling.
+ */
+.hb-board,
+.hb-card,
+.hb-tool,
+.hb-panel {
+  position: relative;
+  border: var(--rule) solid var(--hb-frame);
+  background-color: var(--hb-panel);
+  background-image: var(--hb-tooled);
+  border-radius: 0;
+  box-shadow:
+    inset 1px 1px 0 0 var(--hb-frame-lit),
+    inset -1px -1px 0 0 var(--hb-frame-dark),
+    inset 0 2px 0 2px rgba(0, 0, 0, 0.72),
+    inset 2px 0 0 2px rgba(0, 0, 0, 0.72),
+    inset 0 -1px 0 2px rgba(244, 241, 255, 0.10),
+    inset -1px 0 0 2px rgba(244, 241, 255, 0.10),
+    var(--hb-shadow);
+}
+
+/* ── board, top strip — one horizontal course, minimal cover ─────────────── */
+
+.hb-board {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 5;
+  width: fit-content;
+  max-width: calc(100vw - 72px);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0 14px;
+  padding: 5px 12px 7px;
+  background-color: rgba(14, 9, 30, 0.88);
+  contain: paint;
+}
+
+/* A Greek key runs along the foot of the stele. */
+.hb-board::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  height: 6px;
+  background-image: var(--hb-meander);
+  background-repeat: repeat-x;
+  background-size: 16px 8px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.hb-board h1 {
+  margin: 0;
+  flex-shrink: 0;
+  padding-bottom: 2px;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--hb-ink);
+  text-shadow: 2px 2px 0 var(--pr-bronze-800);
+  white-space: nowrap;
+}
+
+.hb-net {
+  flex-shrink: 0;
+  padding: 1px 6px 0;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  border: 2px solid currentColor;
+  white-space: nowrap;
+}
+.hb-net.is-live { color: var(--hb-live); }
+.hb-net.is-wait { color: var(--hb-gold); }
+.hb-net.is-live::before,
+.hb-net.is-wait::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  vertical-align: middle;
+  background: currentColor;
+  animation: hb-blink 1.6s steps(1, end) infinite;
+}
+@keyframes hb-blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.15; }
+}
+
+.hb-board-block {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 2px 12px;
+  border: 0;
+  border-left: 2px solid var(--hb-edge-dim);
+  white-space: nowrap;
+}
+.hb-board-block span {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--hb-faint);
+}
+.hb-board-block b {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-cyan);
+}
+
+.hb-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding: 0 0 2px 12px;
+  border-left: 2px solid var(--hb-edge-dim);
+}
+.hb-metric b {
+  font-size: 18px;
+  line-height: 0.95;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-ink);
+  white-space: nowrap;
+}
+.hb-metric span {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hb-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── tools, top-right ────────────────────────────────────────────────────── */
+
+.hb-tools {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+}
+.hb-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--hb-dim);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.12s steps(2), border-color 0.12s steps(2);
+}
+.hb-tool:hover {
+  color: var(--hb-ink);
+  border-color: var(--hb-violet);
+}
+.hb-tool.is-on {
+  color: var(--hb-gold);
+  border-color: var(--hb-gold);
+  background: rgba(252, 211, 77, 0.12);
+}
+.hb-tool:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(4, 2, 11, 0.72); }
+
+@keyframes hb-pop {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── inspector card ──────────────────────────────────────────────────────── */
+
+.hb-card {
+  position: absolute;
+  top: 58px;
+  right: 16px;
+  z-index: 7;
+  width: min(252px, calc(100vw - 32px));
+  padding: 10px 12px 11px;
+  border-color: var(--hb-accent, var(--hb-edge));
+  animation: hb-pop 0.14s steps(3, end) both;
+}
+
+.hb-card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.hb-card h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--hb-accent, var(--hb-ink));
+}
+.hb-card > header span {
+  flex-shrink: 0;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hb-faint);
+}
+.hb-card-hash {
+  margin: 0 0 5px;
+  font-family: var(--hb-mono);
+  font-size: 10px;
+  letter-spacing: -0.02em;
+  color: var(--hb-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-card-state {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hb-cyan);
+}
+
+/*
+ * Rank plate. Each tier is lit like its torch — the same fire that identifies
+ * the soldier on the quay names them here, so the two readings agree.
+ */
+.hb-rank {
+  padding: 1px 6px 0;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  border-left: 3px solid currentColor;
+  color: var(--hb-violet);
+}
+.hb-rank.is-rank-0 { color: var(--hb-faint); }
+.hb-rank.is-rank-1 { color: #f0c27b; }
+.hb-rank.is-rank-2 { color: var(--hb-gold); }
+/* Carved, never glass: the canvas cannot blur, so the chrome must not either.
+   Rank weight is carried by a hard offset shadow, matching every other panel. */
+.hb-rank.is-rank-3 {
+  color: var(--hb-gold);
+  text-shadow: 2px 2px 0 rgba(252, 211, 77, 0.28);
+}
+.hb-rank.is-rank-4 {
+  color: #e9d5ff;
+  text-shadow: 2px 2px 0 rgba(233, 213, 255, 0.34);
+}
+
+/* The rank's abilities, listed straight from the registry. */
+.hb-card-abilities {
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+.hb-card-abilities li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  align-items: baseline;
+  padding-left: 6px;
+  border-left: 1px solid var(--hb-edge);
+}
+.hb-card-abilities b {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hb-violet);
+  white-space: nowrap;
+}
+.hb-card-abilities i {
+  font-style: normal;
+  font-family: var(--hb-mono);
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--hb-faint);
+}
+.hb-card-tags {
+  display: flex;
+  gap: 5px;
+  margin: 8px 0 0;
+}
+.hb-card-tags span {
+  padding: 1px 6px 0;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 2px solid var(--hb-edge);
+  color: var(--hb-violet);
+}
+.hb-card-tags span.is-whale {
+  border-color: rgba(252, 211, 77, 0.6);
+  color: var(--hb-gold);
+}
+.hb-card-hint {
+  margin: 8px 0 0;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--hb-faint);
+}
+
+/* ── raw feed panels, bottom-right ─────────────────────────────────────────
+   Triremes cast off to the left; keep this chrome off the exit lane. */
+
+.hb-panels {
+  position: absolute;
+  right: 16px;
+  left: auto;
+  bottom: 46px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(258px, calc(100vw - 32px));
+}
+/* Border/background/shadow come from the shared plaque rule; redeclaring them
+   here silently flattened the bevel back off. Only the open state belongs here,
+   and it must set all four sides or it drops the bevel in the state users spend
+   the most time in. */
+.hb-panel.is-open {
+  border-color: var(--hb-frame-lit) var(--hb-frame-dark)
+                var(--hb-frame-dark) var(--hb-frame-lit);
+}
+.hb-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 9px 3px;
+  border: 0;
+  background: transparent;
+  color: var(--hb-dim);
+  font-family: inherit;
+  cursor: pointer;
+}
+.hb-panel-head:hover { color: var(--hb-ink); }
+.hb-panel-title {
+  flex: 1;
+  text-align: left;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+}
+.hb-panel-count {
+  font-size: 17px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-cyan);
+}
+.hb-panel-caret {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--hb-faint);
+}
+.hb-panel-body {
+  border-top: 2px solid var(--hb-edge-dim);
+  padding: 5px 9px 6px;
+}
+.hb-panel-row {
+  font-family: var(--hb-mono);
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--hb-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hb-panel-row:first-child { color: var(--hb-ink); }
+.hb-panel-row.is-idle { color: var(--hb-faint); }
+
+/* ── the sealing block's cargo, along the foot ───────────────────────────── */
+
+.hb-manifest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  background-color: rgba(6, 4, 14, 0.96);
+  background-image: var(--hb-tooled);
+  border-top: 2px solid var(--hb-frame);
+  box-shadow: inset 0 1px 0 0 var(--hb-frame-lit);
+  contain: paint;
+}
+.hb-manifest-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  background: var(--hb-edge);
+  color: #0b0718;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+}
+.hb-manifest-strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  /* Entries fill from the left; the tail fades instead of clipping mid-hash. */
+  -webkit-mask-image: linear-gradient(90deg, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, #000 90%, transparent);
+}
+.hb-manifest-item {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 12px;
+  font-family: var(--hb-mono);
+  font-size: 10px;
+  color: var(--hb-dim);
+  white-space: nowrap;
+  border-right: 2px solid rgba(91, 71, 160, 0.35);
+  animation: hb-slide 0.18s steps(4, end) both;
+}
+.hb-manifest-item i {
+  font-style: normal;
+  font-family: var(--hb-display);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--hb-violet);
+}
+.hb-manifest-item.is-defi i { color: var(--hb-cyan); }
+.hb-manifest-item.is-nft i { color: var(--hb-orchid); }
+.hb-manifest-item.is-contractDeploy i,
+.hb-manifest-item.is-contractCall i { color: var(--hb-gold); }
+.hb-manifest-item.is-idle { color: var(--hb-faint); font-family: var(--hb-display); font-size: 17px; }
+
+@keyframes hb-slide {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── focus ───────────────────────────────────────────────────────────────── */
+
+.hb a:focus-visible,
+.hb button:focus-visible {
+  outline: 2px solid var(--hb-cyan);
+  outline-offset: 2px;
+}
+
+/* ── responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .hb-board {
+    top: 8px;
+    left: 8px;
+    right: 48px;
+    max-width: none;
+    gap: 0 8px;
+    padding: 4px 8px 6px;
+    overflow-x: auto;
+  }
+  .hb-board h1 { font-size: 14px; letter-spacing: 0.08em; }
+  .hb-net { font-size: 10px; padding: 1px 4px 0; }
+  .hb-board-block { padding-left: 8px; }
+  .hb-board-block b { font-size: 14px; }
+  .hb-metric { padding-left: 8px; }
+  .hb-metric b { font-size: 14px; }
+  .hb-metric span { font-size: 9px; }
+  .hb-tools {
+    top: 8px;
+    right: 8px;
+  }
+  .hb-card {
+    top: auto;
+    bottom: 78px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
+  .hb-panels { display: none; }
+  .hb-manifest-item { padding: 0 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hb-card,
+  .hb-manifest-item { animation: none; }
+  .hb-net.is-live::before,
+  .hb-net.is-wait::before { animation: none; }
+}
+
+/* ── the altar ledger: burned MON, live from base fees ───────────────────── */
+.hb-burn {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0 0;
+  padding-top: var(--sp-3);
+  border-top: var(--rule) solid var(--hb-edge-dim);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--hb-quiet);
+}
+.hb-burn b {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-lost);
+}
+.hb-burn i { font-style: normal; font-size: 11px; color: var(--hb-quiet); }
+
+.hb-berth-tx {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--hb-quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Burn cells in the top course: the offering reads in ember red. */
+.hb-metric-burn b { color: var(--hb-lost); }
+
+/* ── the ship card: a block's ledger, click-through to MonadVision ───────── */
+.hb-card-ship { border-color: var(--hb-frame); }
+.hb-ship-stats {
+  margin: 0 0 var(--sp-3);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--hb-dim);
+}
+.hb-ship-stats b { font-weight: 400; color: var(--hb-ink); font-variant-numeric: tabular-nums; }
+.hb-ship-stats .is-burn { color: var(--hb-lost); }
+
+.hb-ship-projects {
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+.hb-ship-projects li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 2px var(--sp-3);
+  background: var(--hb-recess);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+.hb-ship-projects img {
+  width: 14px;
+  height: 14px;
+  object-fit: cover;
+  /* Real logos, not pixel art: keep them crisp squares in a carved slot. */
+  border: 1px solid var(--hb-edge-dim);
+  background: var(--hb-night);
+}
+.hb-ship-projects span { flex: 1; color: var(--hb-dim); }
+.hb-ship-projects b { font-weight: 400; color: var(--hb-capacity); font-variant-numeric: tabular-nums; }
+.hb-ship-projects .is-other span { color: var(--hb-quiet); }
+
+.hb-ship-link {
+  display: inline-block;
+  padding: 2px 8px 1px;
+  border: var(--rule) solid var(--hb-frame);
+  color: var(--hb-violet);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.hb-ship-link:hover { color: var(--hb-ink); border-color: var(--hb-frame-lit); }
+
+/* Manifest chips that resolved to a known project carry its mark. */
+.hb-manifest-logo {
+  width: 12px;
+  height: 12px;
+  object-fit: cover;
+  margin-right: 4px;
+  vertical-align: -2px;
+  border: 1px solid var(--hb-edge-dim);
+}
+.hb-manifest-item.has-project b {
+  font-weight: 400;
+  margin-right: 5px;
+  color: var(--hb-ink);
+}
+
+/* ── the bridge pod: what swam in, and from where ────────────────────────── */
+.hb-card-life { border-color: var(--hb-frame); }
+.hb-card-life.is-orca { border-color: var(--pr-marble-300); }
+.hb-card-life.is-whale { border-color: var(--hb-capacity); }
+
+.hb-life-amount {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-2);
+}
+.hb-life-amount b {
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-capacity);
+}
+.hb-life-amount i {
+  font-style: normal;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--hb-dim);
+}
+
+.hb-life-route {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-2);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--hb-ink);
+}
+.hb-life-route em { font-style: normal; color: var(--hb-violet); }
+.hb-life-sent {
+  margin: 0 0 var(--sp-3);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--hb-quiet);
+}
+.hb-life-bridge {
+  display: inline-block;
+  margin: 0 0 var(--sp-3);
+  padding: 1px 7px 0;
+  border: 2px solid var(--hb-edge-dim);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hb-violet);
+}

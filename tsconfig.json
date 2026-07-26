@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "//": "Scoped to the JSDoc-typed pure modules — ones that import nothing, so checking them cannot cascade into the untyped canvas code. Widen as more modules gain types.",
+  "include": ["src/ship/capacity.js", "src/ship/ranks.js"]
+}
