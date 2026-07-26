@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { to: '/world', label: 'World' },
   { to: '/agora-world', label: 'Agora' },
   { to: '/odyssey', label: 'Odyssey' },
+  { to: '/odysseyVS', label: 'Troy VS' },
   { to: '/network', label: 'Network' },
   { to: '/ecosystem', label: 'Ecosystem' },
   { to: '/price', label: 'Price', dividerBefore: true },
@@ -31,6 +32,7 @@ const ROUTE_PREFETCH = {
   '/world': () => import('../pages/MonadWorldPage'),
   '/agora-world': () => import('../pages/AgoraWorldPage'),
   '/odyssey': () => import('../pages/ShipPage'),
+  '/odysseyVS': () => import('../pages/OdysseyVsPage'),
 }
 const prefetched = new Set()
 const prefetchRoute = (to) => {
@@ -48,7 +50,7 @@ const Header = () => {
   const location = useLocation()
   const isWorldPage = location.pathname === '/world' || location.pathname === '/world-3d'
   const isAgoraPage = location.pathname === '/agora-world' || location.pathname === '/agora-world-3d'
-  const isShipPage = location.pathname === '/odyssey'
+  const isShipPage = location.pathname === '/odyssey' || location.pathname === '/odysseyVS'
   const shouldRenderHeader = !(isWorldPage || isAgoraPage || isShipPage)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(() =>
