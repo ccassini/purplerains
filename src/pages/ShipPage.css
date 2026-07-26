@@ -58,8 +58,6 @@
   --hb-orchid: var(--pr-wine-400);
   --hb-gold: var(--pr-gold-500);
   --hb-capacity: var(--pr-gold-500);
-  --hb-demand: var(--pr-stone-500);
-  --hb-sailed: var(--pr-laurel-400);
   --hb-lost: var(--pr-blood-400);
   --hb-live: var(--pr-laurel-400);
   --hb-false: var(--pr-blood-400);
@@ -115,7 +113,6 @@
 .hb-card,
 .hb-tool,
 .hb-panel,
-.hb-dock,
 .hb-guide {
   position: relative;
   border: var(--rule) solid var(--hb-frame);
@@ -606,7 +603,6 @@
     width: auto;
   }
   .hb-panels { display: none; }
-  .hb-dock { display: none; }
   .hb-guide {
     top: auto;
     bottom: 78px;
@@ -644,72 +640,6 @@
   color: var(--hb-lost);
 }
 .hb-burn i { font-style: normal; font-size: 11px; color: var(--hb-quiet); }
-
-/* ── berth gauges, bottom-left ────────────────────────────────────────────
-   Consumes berths[] with boarded/load on the shared deckMax scale.
-   Grid (not flex): fixed 9 columns, no stretch/reflow when a slot fills. */
-
-.hb-dock {
-  position: absolute;
-  left: 12px;
-  bottom: 46px;
-  z-index: 6;
-  padding: 8px 10px 9px;
-  contain: paint;
-}
-
-.hb-berths {
-  display: grid;
-  grid-template-columns: repeat(9, 22px);
-  align-items: end;
-  column-gap: var(--sp-3);
-}
-.hb-berth {
-  display: grid;
-  justify-items: center;
-  row-gap: 3px;
-  width: 22px;
-}
-/* The gauge well: a carved recess, hard edges only. */
-.hb-berth-bar {
-  position: relative;
-  width: 100%;
-  height: 34px;
-  background: var(--hb-recess);
-  box-shadow:
-    inset 1px 1px 0 0 rgba(4, 2, 11, 0.9),
-    inset -1px -1px 0 0 rgba(244, 241, 255, 0.08);
-  overflow: hidden;
-}
-/* Bars scale by transform only — no height animation, no layout churn. */
-.hb-berth-bar i {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  transform-origin: bottom;
-}
-/* What the sealed block musters (its real load)… */
-.hb-berth-load {
-  left: 2px;
-  right: 2px;
-  background: var(--hb-demand);
-}
-/* …and how much of that muster is aboard so far. */
-.hb-berth-boarded {
-  left: 6px;
-  right: 6px;
-  background: var(--hb-capacity);
-}
-/* A hull still running in reads dimmer than one lying alongside. */
-.hb-berth.is-approach .hb-berth-bar i { opacity: 0.55; }
-.hb-berth.is-idle .hb-berth-tx { color: var(--hb-faint); }
-
-.hb-berth-tx {
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--hb-quiet);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ── the legend: crest / blazon / torch / bench / whale, taught in place ── */
 

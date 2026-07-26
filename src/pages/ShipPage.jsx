@@ -457,38 +457,6 @@ export default function ShipPage() {
         </article>
       )}
 
-      {/* ── berth gauges, bottom-left (above the block panel) ── */}
-      <section className="hb-dock" aria-label="Berth loading">
-        <div className="hb-berths">
-          {(snap?.berths || []).map((b, i) => (
-            <div
-              key={i}
-              className={`hb-berth${b ? ` is-${b.state}` : ' is-idle'}`}
-              title={b ? `berth ${i + 1} · block #${b.number} · ${b.boarded}/${b.load} boarded` : `berth ${i + 1} · open`}
-            >
-              <span className="hb-berth-bar" aria-hidden="true">
-                {b && (
-                  <>
-                    {/* Shared deckMax scale: a full small hull must not read
-                        like a full large one. Load is the block's real muster;
-                        boarded fills toward it. */}
-                    <i
-                      className="hb-berth-load"
-                      style={{ transform: `scaleY(${Math.min(1, b.load / b.deckMax)})` }}
-                    />
-                    <i
-                      className="hb-berth-boarded"
-                      style={{ transform: `scaleY(${Math.min(1, b.boarded / b.deckMax)})` }}
-                    />
-                  </>
-                )}
-              </span>
-              <span className="hb-berth-tx">{b ? `${b.boarded}/${b.load}` : '·'}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── raw feed panels, bottom-right (clear of the exit lane) ── */}
       <div className="hb-panels">
         <FeedPanel
