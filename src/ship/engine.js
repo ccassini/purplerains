@@ -333,10 +333,9 @@ export function createShipEngine(canvas) {
   /** Release spacing tightens under backlog so the tip of the chain is not orphaned. */
   function releaseInterval() {
     const n = blockQueue.length
-    if (n >= 8) return 0.06
-    if (n >= 5) return BLOCK_INTERVAL_MIN
-    if (n >= 3) return 0.16
-    if (n >= 2) return 0.22
+    if (n >= 5) return 0.06
+    if (n >= 3) return BLOCK_INTERVAL_MIN
+    if (n >= 2) return 0.16
     return BLOCK_INTERVAL
   }
 
@@ -638,10 +637,15 @@ export function createShipEngine(canvas) {
   }
 
   function openBerth(block, slot) {
-    // Blocks arrive from deep water (behind), then angle up to their berth —
-    // not spawned on the fairway mid-scene.
+    // Berth-bound hulls surface from deep water JUST outside their turn-in
+    // rather than at the screen edge. A full crossing to a left-hand berth is
+    // ~1700px at APPROACH_SPEED — over six seconds, sixteen blocks at live
+    // cadence — and that travel time alone was the "ships run 10-15 blocks
+    // behind the tip" bug. From the turn-in the run is under a second, and
+    // rising out of the far fleet lane still reads as an arrival, not a spawn.
     const ship = makeShip(block, FLEET_Y, 'berth', slot)
-    ship.x = offscreenEntryX()
+    const target = berthX(surface.width, slot)
+    ship.x = Math.min(offscreenEntryX(), target + TURN_IN + 90)
     ship.y = FLEET_Y
     berthShips.push(ship)
   }

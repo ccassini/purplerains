@@ -8,7 +8,7 @@
  * crowding into a single line.
  */
 import {
-  PAL, BASE_H, surface, bandGradient, drawPixelText, measurePixelText, formatHullTail,
+  PAL, BASE_H, surface, bandGradient, drawPixelText, measurePixelText, formatHullLabel,
 } from './pixel'
 import {
   getSprite,
@@ -577,12 +577,11 @@ export function drawShips(ctx, ships, t) {
     }
     ctx.restore()
 
-    // The block's 4-digit tail on the strake — blitted outside the ship
-    // transform so the 3x5 font stays snapped to whole buffer pixels. The
-    // full height is one glance away in the HUD.
+    // Full block height on the strake — blitted outside the ship transform
+    // so the 3x5 font stays snapped to whole buffer pixels.
     if (s.number) {
       const s2 = sc * SHIP_SCALE
-      const board = hullLabelSprite(formatHullTail(s.number))
+      const board = hullLabelSprite(formatHullLabel(s.number))
       // Native (SHIP_NATIVE_W/2, DECK_Y + 2) projected back into buffer space.
       const cx = Math.round(x + SHIP_W / 2)
       const ly = Math.round(y + SHIP_H - (SHIP_NATIVE_H - (DECK_Y + 2)) * s2)
