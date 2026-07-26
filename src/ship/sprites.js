@@ -202,7 +202,7 @@ export function hopliteBodyKey(h) {
  * Built around the aspis rather than the body: at eleven pixels the round
  * shield is the only element with enough area to carry a colour, so it holds
  * the figure's identity while the bronze helmet and spear make the silhouette
- * read as a soldier from across the harbour. The body behind it is mostly
+ * read as a soldier from across the Odyssey. The body behind it is mostly
  * hidden, which is also how the thing was actually carried.
  */
 function buildBody(h) {
@@ -333,7 +333,7 @@ function buildShip(v) {
   // Stepped well forward; everything abaft the mast belongs to the boarding
   // deck. The sail is a clean professional standard: one field of cloth, one
   // small device, nothing else — the trims and swallowtails of earlier cuts
-  // read as clutter at harbour distance.
+  // read as clutter at Odyssey distance.
   R(ctx, 12, 2, 1, 14, PAL.hullMid)
   R(ctx, 12, 2, 1, 5, PAL.hullLit)          // lit face, upper-left, one sun
   R(ctx, 12, 1, 1, 1, PAL.gold)             // gilded masthead truck
@@ -529,7 +529,7 @@ export function farShipSprite(variant) {
  *
  * This replaces a stepped Pharos lighthouse, which was an anachronism: the
  * Pharos is a 3rd-century-BC Ptolemaic building and has no business in a
- * Homeric harbour. A temple and a burning altar are period-correct, and they
+ * Homeric Odyssey. A temple and a burning altar are period-correct, and they
  * give the Torchbearers' fire an honest source — every torch on the quay is lit
  * from this altar.
  */

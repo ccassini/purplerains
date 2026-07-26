@@ -47,7 +47,7 @@ const FLAME_ART = [
     [[1, 1, 1, 3, PAL.beaconLamp], [2, 1, 1, 1, PAL.beaconLamp], [1, 0, 1, 1, PAL.sunCore]],
     [[1, 1, 1, 3, PAL.beaconLamp], [1, 0, 1, 1, PAL.sun]],
   ],
-  // 4 Archon — beacon-fire itself. The only pure white in the harbour, and on
+  // 4 Archon — beacon-fire itself. The only pure white in the Odyssey, and on
   // phase 2 a pixel at canvas row 0 stands above every other silhouette.
   [
     [[1, 2, 1, 2, PAL.beaconBand], [1, 1, 1, 1, PAL.beacon]],

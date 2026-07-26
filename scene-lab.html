@@ -3,7 +3,7 @@
   Dev-only scene lab. Vite serves root HTML in dev; the production build takes
   only index.html as an entry, so this never ships.
 
-  Why it exists: the harbour draws inside requestAnimationFrame, and browsers
+  Why it exists: the Odyssey draws inside requestAnimationFrame, and browsers
   suspend rAF in a hidden tab — so in a headless or backgrounded pane the live
   canvas never paints even one frame. This page swaps rAF for a manual queue
   BEFORE starting the engine, then pumps a fixed number of frames with

@@ -10,14 +10,14 @@
 
 /** Internal vertical resolution — tall enough for a deep sea band under the quay. */
 export const BASE_H = 380
-/** Floor / ceiling for the internal width — Troy-wide harbour, not a cropped dock. */
+/** Floor / ceiling for the internal width — Troy-wide Odyssey, not a cropped dock. */
 export const MIN_BASE_W = 720
 export const MAX_BASE_W = 1760
 
 /**
  * Monad Odyssey palette: a bronze-age embarkation at dusk. Violet water and
  * skies keep the Monad identity, while bronze, marble and linen carry the
- * Aegean theme. The harbour this idea came from is a warm daylight scene with
+ * Aegean theme. The Odyssey this idea came from is a warm daylight scene with
  * a cartoon palette, so the two never read alike.
  */
 export const PAL = {
@@ -203,7 +203,7 @@ export function drawPixelText(ctx, text, x, y, color) {
   }
 }
 
-/** Thousands-separated block number, matching the harbour's label style. */
+/** Thousands-separated block number, matching the Odyssey's label style. */
 export function formatBlockLabel(n) {
   const v = Number(n)
   if (!Number.isFinite(v)) return '#0'

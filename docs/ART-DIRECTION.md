@@ -1,4 +1,4 @@
-# Harbour of the Wine-Dark — art direction spec
+# Monad Odyssey — art direction spec
 > Produced by a 24-agent art-direction workflow (recon -> 7 discipline leads ->
 > adversarial cohesion/feasibility critique -> unified synthesis).
 > Implementation status is tracked in docs/ART-DIRECTION-STATUS.md.
@@ -7,7 +7,7 @@
 
 ## Manifesto — six pillars
 
-THE HARBOUR OF THE WINE-DARK — 6 pillars. Each has a binary test.
+MONAD ODYSSEY — 6 pillars. Each has a binary test.
 
 GROUND TRUTH FIRST (both recon docs and 4 of 7 layer specs are stale; verified against the working tree 2026-07-25):
 BASE_H=320, MIN_BASE_W=480, MAX_BASE_W=1120. PIER_Y=128, SEA_Y=92, BERTH_Y=138 (row0)/162 (row1), TRANSIT_Y=186, PASS_Y=224, OUTBOUND_Y=269, QUAY_FEET_Y=112. BERTH_COUNT=6 in 3x2, BERTH_ROW_GAP=24. berthPitch is ALWAYS 90 (clamped at every legal width), so berthX(w,i)=round(w*0.04)+col*90 and the whole berth field lives in x 19..253 (w=480) / 45..279 (w=1120) — the right 75% of a wide buffer holds no ship at all. SHIP_W=54, SHIP_H=26, DECK_Y=16, hullDepth=6+size (6/7/8), OAR_COUNT=6/X0=10/STEP=5, DECK_COLS=4. HOPLITE 11x17. MAX_QUEUE=28, DECK_MAX=16 -> worst case 124 sprites, not 216. queueEndX(w)=min(w-48, rampTopX(w,2)+56) = 323 (w=480) / 349 (w=1120): the muster is ~232px wide at EVERY width. ranks.js/flames.js/motes.js/abilities.js/poses.js/hopliteRender.js all exist and are fully wired. sprites.js has NO cache-pressure problem (ships 299 keys / bound 400; figures 108 keys / bound 192). ShipPage.jsx does NOT currently render a berth gauge or a tally strip — engine.snapshot() emits 6 fully-populated berth rows and `skipped`/`sailed`/`queued` and the DOM throws all of it away. That is the single largest missing information surface on the page.
@@ -40,7 +40,7 @@ TEST: `SCENE_FX_FILL_BUDGET = 160` fills/frame for every new draw pass combined,
 
 ## Palette (canvas PAL)
 
-FINAL PAL — src/ship/pixel.js. 69 keys. 41 kept byte-identical, 6 revalued under the same name, 8 dead keys renamed (grep-verified zero readers), 14 added, 0 used keys removed. Because no consumed key name disappears, the object can be swapped wholesale and harborScene.js / sprites.js / engine.js / flames.js / abilities.js / poses.js / motes.js keep compiling and rendering on the first commit. Everything after that is opt-in.
+FINAL PAL — src/ship/pixel.js. 69 keys. 41 kept byte-identical, 6 revalued under the same name, 8 dead keys renamed (grep-verified zero readers), 14 added, 0 used keys removed. Because no consumed key name disappears, the object can be swapped wholesale and odysseyScene.js / sprites.js / engine.js / flames.js / abilities.js / poses.js / motes.js keep compiling and rendering on the first commit. Everything after that is opt-in.
 
 ```js
 export const PAL = {
@@ -333,7 +333,7 @@ It is also the right narrative choice, not merely the cheap one: the hoplites fa
 The sun must NOT be a width fraction. berthPitch is pinned at 90 while `sunX` would track width, so no single fraction keeps the sun path out of a hull at every legal width (I solved it: `0.14w - 90c ∈ (54,90)` has no solution covering 480..1120). Anchor it to the berth grid instead:
 
 ```js
-// harborScene.js — replaces SUN_FX and sunX
+// odysseyScene.js — replaces SUN_FX and sunX
 /** The sun sits in the first clear-water lane, by construction, at every width. */
 export const sunX = (w) => berthX(w, 0) + SHIP_W + 18   // = berthX + 72
 const SUN_CY = SEA_Y - 12   // 80, was SEA_Y - 20 = 72
@@ -343,11 +343,11 @@ The gap between berth column 0 and column 1 is exactly `[berthX+54, berthX+90]`,
 `SUN_CY = 80` finally delivers the half-set sun the docstring has always promised and never rendered. Disc rows become 67..93, the dead `if (y >= SEA_Y) break` now genuinely fires at y=92, and rows 80..91 fall inside the headland strip band — so the ridge (drawn after `drawSun`, inside `drawSky`) cuts the lower third wherever it is tall and the waterline clips the rest. Today the disc bottom is row 85 and the ridge tops out around 80-86, so the "clip" is 0-6 rows depending on width and reads as an accident.
 
 THREE LIGHT SOURCES. THERE ARE NO OTHERS.
-1. HELIOS — the key. Low and seaward. Because it is low it does not model form; it RIMS and SILHOUETTES. Its jobs: the sky ramp, the sun path on water, a 1px rim on the upper-left of solids, and the reason the foreground is dark. Contre-jour is what makes a harbour feel fateful.
+1. HELIOS — the key. Low and seaward. Because it is low it does not model form; it RIMS and SILHOUETTES. Its jobs: the sky ramp, the sun path on water, a 1px rim on the upper-left of solids, and the reason the foreground is dark. Contre-jour is what makes an Odyssey feel fateful.
 2. THE FIRE — the Pharos, the braziers, and every torch. The only light that moves and changes. `PAL.beaconLamp`, `PAL.bronzeLit`, `PAL.sunCore`, `PAL.beacon`, `PAL.white`.
 3. THE GAZE — the focus bracket. `PAL.gold` -> `PAL.marble #e8e0f5` in `engine.js draw()`. Present only while a viewer is looking, gone the instant they look away.
 
-Everything else is reflected light. `hearthglow` (abilities.js) is the ONLY ground light in the harbour and it stays that way: its own comment says "an Archon gets more fire on the stone rather than a shadow — nothing else in this harbour casts one." That is a documented scarcity rule and it is load-bearing.
+Everything else is reflected light. `hearthglow` (abilities.js) is the ONLY ground light in the Odyssey and it stays that way: its own comment says "an Archon gets more fire on the stone rather than a shadow — nothing else in this Odyssey casts one." That is a documented scarcity rule and it is load-bearing.
 
 CUT: queue cast shadows. CUT: torch pools. Both were specified at `PIER_Y` = row 128, which is the exact row `hearthglow` paints (`h.y + 16` for a queued figure at `QUAY_FEET_Y = 112`), in three different colours from two systems that never spoke. And the shadow was specified at `x+9..x+13` while `layoutQueue` yields an 8.3px pitch at MAX_QUEUE — the effect billed as "the highest value-per-fill item in the spec" is buried inside the next man exactly when the rank is longest.
 
@@ -445,7 +445,7 @@ stylobate               (0,41,34,3,stoneFar) + (0,41,34,1,stoneFarLit)
 ```
 26 rects, one-off. The shafts land at buffer 81..88, dead inside the `skyHorizon` band (L .2186); `stoneFarLit` at L .0616 gives 2.6:1 — the sharpest silhouette in the background, which is correct because it is the sacred thing and it stands closest to the water. A pediment is the most recognisable Greek shape available at this resolution; it is worth its 4 rects. Note the column shade is on the RIGHT of each shaft, obeying the Light Law.
 
-ONE RUIN, NOT FOUR. The existing `colonnadeSprite()` already has a snapped column. That is the harbour's single ruin and it stays that way. Four fallen drums across three specs said "this civilisation is dead" about a working port that seals a block every 340ms.
+ONE RUIN, NOT FOUR. The existing `colonnadeSprite()` already has a snapped column. That is the Odyssey's single ruin and it stays that way. Four fallen drums across three specs said "this civilisation is dead" about a working port that seals a block every 340ms.
 
 AERIAL PERSPECTIVE — the missing layer, 6 fills/frame.
 Today far ships use `PAL.islandFar`, the same ink as the near headland: zero aerial perspective, and against the new `seaHorizon` they sit at 1.20:1 and are effectively invisible.
@@ -509,7 +509,7 @@ if (flare > 0) {
 ```
 
 THE NAME STONE — replaces `drawSignpost`, fixes a real collision, and costs 130 fewer fills.
-Today `boardW = measurePixelText('MONAD ODYSSEY') + 12 = 63` at x=40, spanning x 40..102, while `rampTopX(480, 0) = 87` — the board overlaps the first plank head and bollard at minimum width. And the name is NOT changed to a Greek place-name: "Aulis" is famous for exactly one thing, Agamemnon sacrificing Iphigenia to buy wind, which inverts the emotional reading of the departure beat this whole harbour exists to produce; and on a phone (tagline hidden below 900px, board cropped by COVER) it would leave the product name nowhere on screen.
+Today `boardW = measurePixelText('MONAD ODYSSEY') + 12 = 63` at x=40, spanning x 40..102, while `rampTopX(480, 0) = 87` — the board overlaps the first plank head and bollard at minimum width. And the name is NOT changed to a Greek place-name: "Aulis" is famous for exactly one thing, Agamemnon sacrificing Iphigenia to buy wind, which inverts the emotional reading of the departure beat this whole Odyssey exists to produce; and on a phone (tagline hidden below 900px, board cropped by COVER) it would leave the product name nowhere on screen.
 Stack it instead — two lines, which is both narrower and more monumental:
 ```
 line 1 'MONAD'    3x5, 19px wide
@@ -619,7 +619,7 @@ const SEAL_ART = [
 ]
 ```
 Taller (5 not 4), narrower in body, NO gold and NO `beaconBand` violet — so it can never be confused with any rank torch, while white still means beacon. 4 phases at 16fps: `sealFireSprite(Math.floor(age * 16) & 3)`. `SEAL_FIRE_SECONDS = 0.45`.
-(c) THE TOWER ANSWERS — see `vfx`. Ship reports, harbour acknowledges.
+(c) THE TOWER ANSWERS — see `vfx`. Ship reports, Odyssey acknowledges.
 GATE, and the lifecycle bug it fixes: `sealedAt` is a timestamp that engine.js explicitly documents can legitimately be 0 on the first frame, so `sealedAt > 0` is not a safe test. Use a dedicated `ship.sealFlash` initialised to 0 in `makeShip`, set to 0.30 in `seal()`, and decremented at the head of BOTH the `berthShips` loop AND the `ships` loop. The common seal path (`passengers.length >= load && !stillLeaping`) flips `dock` to `'casting'` on the very next frame — `STRAGGLER_GRACE` is a ceiling on the wait, not a floor — so the flash survives only on the 0.38s plank retraction, an 0.08s margin on a constant another layer owns. Decrementing in both arrays removes the dependency entirely.
 
 TWO ALLOCATIONS PER FRAME, REMOVED. `drawShips` does `[...ships].sort((a,b) => a.y - b.y)` and is called TWICE per frame — two array allocations every frame, against a particle pool that is scrupulously allocation-free. Replace with a module-level scratch array refilled in place:
@@ -646,20 +646,20 @@ A block has exactly five properties and every one of them is already computed:
 - A COMPANY — `planShipLoad().load`, the crew the chain gave it. UNTOUCHABLE.
 - A DRAUGHT — `size` 0/1/2 via `hullDepth = 6 + size`, so a heavy verse is a heavy hull that rides visibly lower.
 - EMPTY BENCHES — `capacity - load`, seats it was given and did not use. Sacred.
-- ONE DEPARTURE, and no return. Nothing in this harbour moves east.
+- ONE DEPARTURE, and no return. Nothing in this Odyssey moves east.
 
 THE TEN-BEAT LIFE OF A BLOCK. All timings derived from live engine constants at w=480 and w=1120.
-1. SIGHT (2.9s at w=480, 6.7s at w=1120). A hull appears at the right edge out of clear water, six oars sweeping, wake behind it, bobbing +/-1px. `APPROACH_SPEED = 165 px/s`. By far the longest beat and it must stay that way — this is why the harbour has to be wide.
+1. SIGHT (2.9s at w=480, 6.7s at w=1120). A hull appears at the right edge out of clear water, six oars sweeping, wake behind it, bobbing +/-1px. `APPROACH_SPEED = 165 px/s`. By far the longest beat and it must stay that way — this is why the Odyssey has to be wide.
 2. TURN-IN (~0.8s). Over the last `TURN_IN = 130px` the hull angles up out of the fairway (y=186) onto its mooring line (y=138 or 162), passing IN FRONT of anything already alongside. `drawShips` sorts by y for exactly this.
 3. THE STILLNESS (~0.1s, and it must be felt). `dock = 'moored'`, `rowing = false`. Oars upright, bob dead, wake gone — three things stop on the same frame.
 4. THE WAY OPENS (0.38s, `PLANK_SECONDS`). The plank runs out from `rampTopX` to the after deck, a `bronzeDark` cleat every 5th step.
-5. THE CROSSING (0.04s per man, `BOARD_INTERVAL`; <=0.64s for a full deck of 16). Men leap at 200 px/s in arcs, filling the deck back-row-first so each arrival lands in front of the last. The only fast, violent, joyful thing in the harbour. `pickQueued` sends the highest rank first, oldest on ties — high-value, high-gas transactions really do get in first, and that is the order's one act of agency.
-6. **THE SEAL (0.30s flash / 0.45s fire) — THE CLIMAX, AND TODAY IT HAS NO PICTURE.** Hull goes gold along its taper; a beacon-fire lights at the stern post; the Pharos answers with one brighter pulse for 0.25s. Ship reports, harbour acknowledges, the message goes on west. See `ships` and `vfx` for exact construction. This is the highest-value change in the entire redesign and it must be built and looked at BEFORE any label is written.
+5. THE CROSSING (0.04s per man, `BOARD_INTERVAL`; <=0.64s for a full deck of 16). Men leap at 200 px/s in arcs, filling the deck back-row-first so each arrival lands in front of the last. The only fast, violent, joyful thing in the Odyssey. `pickQueued` sends the highest rank first, oldest on ties — high-value, high-gas transactions really do get in first, and that is the order's one act of agency.
+6. **THE SEAL (0.30s flash / 0.45s fire) — THE CLIMAX, AND TODAY IT HAS NO PICTURE.** Hull goes gold along its taper; a beacon-fire lights at the stern post; the Pharos answers with one brighter pulse for 0.25s. Ship reports, Odyssey acknowledges, the message goes on west. See `ships` and `vfx` for exact construction. This is the highest-value change in the entire redesign and it must be built and looked at BEFORE any label is written.
 7. THE STRAGGLERS (0.35s, `STRAGGLER_GRACE`). Anyone mid-leap lands. Nobody is left in the air.
 8. CASTING OFF (0.38s). The plank hauls back in, quay-end last.
 9. THE WESTING (~4s). Oars bite, 36 px/s^2 to a 62 px/s ceiling, and over `DEPART_RUN = 110px` she drops from the mooring line into the outbound lane at y=269 — nearer the viewer, larger in frame, at her most present at the exact moment she is leaving. The departure beat must feel like ASCENSION, not bereavement: a block reaching finality is kept, not lost.
 10. GONE. Off the left edge. Every passenger flips to `'gone'`, `sailed++`.
-Total on-screen life: 8-14s, of which ~9s is approach and departure. Protect that ratio — the harbour is not a machine that processes blocks, it is a place where you watch one arrive, matter, and go.
+Total on-screen life: 8-14s, of which ~9s is approach and departure. Protect that ratio — the Odyssey is not a machine that processes blocks, it is a place where you watch one arrive, matter, and go.
 
 THE SIX MOORINGS, IN THE UI. `engine.snapshot()` already emits, per berth, a fully-populated row — `{ slot, number, boarded, load, capacity, deckMax, txCount, fillPct, state }` — and `ShipPage.jsx` currently renders NONE of it. That is the largest missing information surface on the page and it is free to add.
 
@@ -959,7 +959,7 @@ RESPONSIVE — `.hb-guide { display: none }` below 640px is a legibility failure
   .hb-tool:active { transform: none; }
 }
 ```
-A11Y CONTRACTS PRESERVED VERBATIM: `aria-pressed` + `aria-label` on both toggles, `aria-label` on the exit Link, `aria-expanded` + `aria-controls` on both panel heads, `aria-label="Harbour readout"` on the board, `aria-live="off"` on the manifest (it changes 3x/second and would flood a screen reader), the canvas `aria-label`, and `aria-hidden="true"` on every `<i>` and every decorative SVG.
+A11Y CONTRACTS PRESERVED VERBATIM: `aria-pressed` + `aria-label` on both toggles, `aria-label` on the exit Link, `aria-expanded` + `aria-controls` on both panel heads, `aria-label="Monad Odyssey readout"` on the board, `aria-live="off"` on the manifest (it changes 3x/second and would flood a screen reader), the canvas `aria-label`, and `aria-hidden="true"` on every `<i>` and every decorative SVG.
 
 DEAD CODE REMOVED: `ShipPage.css:289` (`.hb-card ~ .hb-guide { top: 214px }`), `ShipPage.css:349` and `:353` (the two blur shadows), `ShipPage.jsx:76-85` (runtime font `<link>` injection — moves to `index.html`), and the `wght@400;600` on JetBrains Mono (600 is requested and never used). `lucide-react` stays a dependency — nine other files import it — but the `ShipPage.jsx:3` import goes.
 
@@ -1025,7 +1025,7 @@ Adding entries to `GLYPHS` is a plain object-literal edit with zero runtime cost
 ')': ['100','010','010','010','100']    '!': ['010','010','010','000','010']
 ```
 `%` is genuinely needed (fillPct); the rest close obvious holes. Total set: 45 -> 53.
-NO Greek capitals and NO homoglyph alias table. Three reasons, all fatal to the proposal: at 3x5 the bitmap for 'Θ' (`111/101/111/101/111`) is BYTE-IDENTICAL to the digit 8, and the proposed placement put it immediately left of a berth number; seven of the nine proposed berth marks are Latin or digit homoglyphs at this resolution, so the wayfinding payoff is zero while the misreading cost is real; and the proposal's own law ("maximum four Greek marks on screen — above that it becomes a costume") was violated by its own sites, which totalled nineteen. A harbour sign that says the same name twice in two alphabets is a theme-park device.
+NO Greek capitals and NO homoglyph alias table. Three reasons, all fatal to the proposal: at 3x5 the bitmap for 'Θ' (`111/101/111/101/111`) is BYTE-IDENTICAL to the digit 8, and the proposed placement put it immediately left of a berth number; seven of the nine proposed berth marks are Latin or digit homoglyphs at this resolution, so the wayfinding payoff is zero while the misreading cost is real; and the proposal's own law ("maximum four Greek marks on screen — above that it becomes a costume") was violated by its own sites, which totalled nineteen. An Odyssey sign that says the same name twice in two alphabets is a theme-park device.
 
 NO 5x7 SECOND FONT. Its only consumer was the signpost's second line, and the two-line 3x5 name stone (see `environment`) is narrower, monumental, needs no second `drawPixelText` variant, and fixes the x=87 collision. The protected finding inside that proposal was the CACHING arithmetic, not the letterforms — and the caching lands in full: the signpost drops from ~132 fillRects/frame to 1 drawImage + 2 fillRects, a net **-130 fills/frame**, while the inscription gets bigger. The proposed 1px serif flares are also cut on the same grounds as Cinzel: they would have dragged the bitmap tier toward Rome to match a DOM face that is no longer there.
 
@@ -1034,7 +1034,7 @@ ON-CANVAS TEXT — two call sites, both now cached.
 2. Name stone: `PAL.plateText #d8ceff` on `PAL.plate #0f0a24` (14.1:1), bevel `PAL.bronze` top+left / `PAL.black` bottom+right. Now blitted from a 39x18 cached strip.
 Both formatters stay exactly as they are. `formatHullLabel` omits the '#' deliberately — at 3px wide it is indistinguishable from an 'A' and costs 4px the hull does not have — and `de-DE` grouping is why '.' must stay in the glyph set.
 
-COPY. `.hb-tagline` -> **"EVERY BLOCK SAILS · THE SEA KEEPS THE COUNT"**. `.hb-guide h2` -> **"READING THE HARBOUR"**. Tally captions -> **waiting / sailed / unsung**. Everything load-bearing keeps its technical noun: MAINNET/DEMO, BLOCK, tx/s, blocks/min, block time, MEMPOOL, BLOCK PRODUCTION, IN BLOCK, and every `CATEGORY_LABEL` value (transfer/swap/mint/call/deploy/tx). THE NAMING LAW: proper nouns may be mythic; common nouns must be plain English; the disclosure of whether the data is real is NEVER mythologised. That one rule is what stops a Homeric skin becoming Ren-faire pastiche on a blockchain product.
+COPY. `.hb-tagline` -> **"EVERY BLOCK SAILS · THE SEA KEEPS THE COUNT"**. `.hb-guide h2` -> **"MONAD ODYSSEY"**. Tally captions -> **waiting / sailed / unsung**. Everything load-bearing keeps its technical noun: MAINNET/DEMO, BLOCK, tx/s, blocks/min, block time, MEMPOOL, BLOCK PRODUCTION, IN BLOCK, and every `CATEGORY_LABEL` value (transfer/swap/mint/call/deploy/tx). THE NAMING LAW: proper nouns may be mythic; common nouns must be plain English; the disclosure of whether the data is real is NEVER mythologised. That one rule is what stops a Homeric skin becoming Ren-faire pastiche on a blockchain product.
 The `abilities.js` names come under the same law and two of them break it: **"Emberwake"** and **"Hearthglow"** are fantasy-RPG compound nouns — Destiny, not Homer — and they are already rendering on the inspector card. Rename to plain English with the same blurbs: `emberwake -> "The Fire You Carry"`, `hearthglow -> "Firelight on Stone"`. `Quickstep`, `Called to the Plank`, `Wake of the Crossing` and `Last Light` already comply.
 NAME POOLS (`sprites.js:126-130`): `NAME_A` currently contains `Nyx, Vela, Orin, Kite, Echo, Nova, Rune, Ivy, Halo, Mira, Onyx, Cinder` — science-fiction names that break the world on sight. Replace with 18: `Alkon, Bryas, Doros, Elpis, Hylas, Idas, Kleon, Lykos, Melas, Nestor, Oros, Peleus, Pyrrhos, Straton, Teukros, Thoas, Xanthos, Zetes`. `NAME_B` keeps all 7 existing and adds `the Younger` — patronymic naming is the most Homeric habit there is and it reads instantly. Longest render: "Shieldwright" + prefix = 20 chars at 20px VT323 ≈ 200px, inside the 272px rail minus 24px padding.
 
@@ -1270,7 +1270,7 @@ let lastSeal = -99
 for (const s of berthShips) if (s.sealFlash > 0 && s.sealedAt > lastSeal) lastSeal = s.sealedAt
 drawBeacon(ctx, w, t, lastSeal)
 ```
-Zero added fills. It converts a per-hull effect into a harbour-wide heartbeat and gives the Pharos — currently pure scenery — a job tied to chain state.
+Zero added fills. It converts a per-hull effect into a Odyssey-wide heartbeat and gives the Pharos — currently pure scenery — a job tied to chain state.
 
 EFFECT 3 — CAST-OFF SURGE. Fires at the `casting -> away` transition (plank fully in, oars bite). ~6 pool slots at 3 departures/s.
 ```js
@@ -1418,7 +1418,7 @@ STEP 14 — VERIFICATION PASS.
 - Resize-drag the window edge for ten seconds and watch memory: the wave strips must not rebuild.
 - 375px wide: legend present and scrollable, tools 44px, board readable, berth grid at 2 columns.
 
-NEVER SHIP STEP 12's LEGEND COPY BEFORE STEPS 6 AND 9. Copy that promises a seal-fire, a crest-and-blazon vocabulary or a rank ladder over a harbour that does not draw them is a lie in the UI, and this project's entire posture — the `skipped` counter, the "unsampled crew · no tx" disclosure, the honest empty benches — is that it does not lie about what it is showing.
+NEVER SHIP STEP 12's LEGEND COPY BEFORE STEPS 6 AND 9. Copy that promises a seal-fire, a crest-and-blazon vocabulary or a rank ladder over an Odyssey that does not draw them is a lie in the UI, and this project's entire posture — the `skipped` counter, the "unsampled crew · no tx" disclosure, the honest empty benches — is that it does not lie about what it is showing.
 
 ---
 
@@ -1447,9 +1447,9 @@ DEV GUARD: `SCENE_FX_FILL_BUDGET = 160` fills/frame, asserted in `engine.draw()`
 
 DOM PERFORMANCE. `contain: paint` on `.hb-board` (repaints ~3x/s beside a 60fps canvas, and now carries a repeating gradient plus six inset shadows invalidated together), `.hb-panel-body` and `.hb-manifest`. Every transition is on `color`, `border-color`, `background-color`, `box-shadow`, `transform` or `width` — all compositor-safe or paint-cheap, none layout-bound. The one `width` transition is on a 7px absolutely-positioned `<em>` inside `overflow: hidden`, so it cannot reflow anything. React commits stay throttled at ~10/s by the existing `emitAccum` gate.
 
-TYPE SAFETY AND TOOLING. Plain JS with JSDoc throughout, verified by `npm run typecheck` (`tsc --checkJs`). No `.ts` files. The ESLint config is not edited — a protective hook forbids it. New modules follow the existing pattern: `flames.js`'s frozen art tables, `ranks.js`'s pure-module discipline (imports nothing, touches no canvas), `motes.js`'s typed-array SoA. Every new draw function stays PURE — takes state and paints, holds no per-frame mutable state — which is the contract stated at the top of `harborScene.js`. `omen`/dread-ladder state, which would have required stateful debouncing inside a draw function, is cut entirely for exactly this reason (and because its triggers measured the visualiser's own drop rate, not the chain — turning the tideline blood-red because our renderer fell behind would be a lie told in Monad's voice, and putting the sun out during a 1.2s websocket hiccup is not something anyone ships on a branded page).
+TYPE SAFETY AND TOOLING. Plain JS with JSDoc throughout, verified by `npm run typecheck` (`tsc --checkJs`). No `.ts` files. The ESLint config is not edited — a protective hook forbids it. New modules follow the existing pattern: `flames.js`'s frozen art tables, `ranks.js`'s pure-module discipline (imports nothing, touches no canvas), `motes.js`'s typed-array SoA. Every new draw function stays PURE — takes state and paints, holds no per-frame mutable state — which is the contract stated at the top of `odysseyScene.js`. `omen`/dread-ladder state, which would have required stateful debouncing inside a draw function, is cut entirely for exactly this reason (and because its triggers measured the visualiser's own drop rate, not the chain — turning the tideline blood-red because our renderer fell behind would be a lie told in Monad's voice, and putting the sun out during a 1.2s websocket hiccup is not something anyone ships on a branded page).
 
-ACCESSIBILITY CONTRACTS, PRESERVED VERBATIM. `aria-pressed` + `aria-label` on both toggles; `aria-label` on the exit `Link`; `aria-expanded` + `aria-controls` on both panel heads; `aria-label="Harbour readout"` on the board; `aria-live="off"` on the manifest (it changes 3x/second and would flood a screen reader); the descriptive canvas `aria-label`; `aria-hidden="true"` on every decorative `<i>` and every SVG. All ornament is CSS masks and inline SVG, so none of it enters the accessibility tree. `:focus-visible` is kept over `:focus` so mouse users never see the ring. Touch targets grow 32px -> 40px desktop / 44px touch. The reduced-motion block is expanded to cover the new keyframes and, critically, holds the FINAL state (`opacity: 1`) rather than the initial one — so the liveness indicator stays visible rather than frozen mid-blink.
+ACCESSIBILITY CONTRACTS, PRESERVED VERBATIM. `aria-pressed` + `aria-label` on both toggles; `aria-label` on the exit `Link`; `aria-expanded` + `aria-controls` on both panel heads; `aria-label="Monad Odyssey readout"` on the board; `aria-live="off"` on the manifest (it changes 3x/second and would flood a screen reader); the descriptive canvas `aria-label`; `aria-hidden="true"` on every decorative `<i>` and every SVG. All ornament is CSS masks and inline SVG, so none of it enters the accessibility tree. `:focus-visible` is kept over `:focus` so mouse users never see the ring. Touch targets grow 32px -> 40px desktop / 44px touch. The reduced-motion block is expanded to cover the new keyframes and, critically, holds the FINAL state (`opacity: 1`) rather than the initial one — so the liveness indicator stays visible rather than frozen mid-blink.
 
 CROSS-LAYER CONTRACTS THAT MUST NOT DRIFT.
 1. `--hb-accent` <- `focus.color` <- `focus.traits.cloakSignal` (was `.cloak`). Both consumers keep a fallback, so a null accent degrades safely.

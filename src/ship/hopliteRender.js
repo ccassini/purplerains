@@ -25,7 +25,7 @@ import { flameSprite } from './flames'
 import { RANK_UNLIT, RANK_EMBER } from './ranks'
 import { GROUND_ABILITIES, OVER_ABILITIES, MAX_WAKE_LEAPERS } from './abilities'
 import { drawMotes } from './motes'
-import { depthScale } from './harborScene'
+import { depthScale } from './odysseyScene'
 
 function figureScale(y) {
   return depthScale(y) * SHIP_SCALE
@@ -47,7 +47,7 @@ function buried(h) {
 
 /**
  * Effective rank for the flame: a guttering torch drops to an Ember and then
- * goes out entirely. Burndown only ever fires when the harbour genuinely has
+ * goes out entirely. Burndown only ever fires when the Odyssey genuinely has
  * no berth wanting crew, which is the only way it can be truthful.
  *
  * @param {{rank: number, guttering?: boolean, gutterLeft?: number}} h

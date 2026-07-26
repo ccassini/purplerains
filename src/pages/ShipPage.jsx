@@ -81,7 +81,7 @@ export default function ShipPage() {
   }, [])
 
   // DeFiLlama Monad TVL for the top board — refresh on a slow cadence so the
-  // harbour strip stays current without hammering the API.
+  // Odyssey strip stays current without hammering the API.
   useEffect(() => {
     let stop = false
     const load = async () => {
@@ -144,7 +144,7 @@ export default function ShipPage() {
           return true
         })
       } catch {
-        // A bridge outage must never take the harbour down with it.
+        // A bridge outage must never take the Odyssey down with it.
       }
     }
     tick()
@@ -280,7 +280,7 @@ export default function ShipPage() {
       />
 
       {/* ── board, top strip — one horizontal course, minimal cover ─── */}
-      <section className="hb-board" aria-label="Harbour readout">
+      <section className="hb-board" aria-label="Monad Odyssey readout">
         <h1>MONAD ODYSSEY</h1>
         <span className={`hb-net ${isConnected ? 'is-live' : 'is-wait'}`}>
           {isConnected ? 'MAINNET' : 'CONNECTING'}
@@ -315,7 +315,7 @@ export default function ShipPage() {
           type="button"
           className={`hb-tool${guideOpen ? ' is-on' : ''}`}
           onClick={() => setGuideOpen((v) => !v)}
-          aria-label="Reading the harbour — legend"
+          aria-label="Monad Odyssey — legend"
           aria-pressed={guideOpen}
           aria-controls="hb-guide"
         >
@@ -328,8 +328,8 @@ export default function ShipPage() {
 
       {/* ── the legend: what the pixels mean, in the scene's own words ── */}
       {guideOpen && (
-        <aside className="hb-guide" id="hb-guide" aria-label="Reading the harbour">
-          <h3>READING THE HARBOUR</h3>
+        <aside className="hb-guide" id="hb-guide" aria-label="Monad Odyssey">
+          <h3>MONAD ODYSSEY</h3>
           <ul>
             <li>
               <b>crest</b>

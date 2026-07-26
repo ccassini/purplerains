@@ -2,7 +2,7 @@
 
 > **STATUS: IMPLEMENTED (phases 1–5) — live data only.** Phase 6 (demo
 > spawners) is CANCELLED by explicit instruction: no demo mode, no mock data,
-> ever. The harbour runs exclusively on the live chain feed. Additions beyond
+> ever. The Odyssey runs exclusively on the live chain feed. Additions beyond
 > the plan: the burnt-offering ledger (per-block and session burned MON from
 > gasUsed × baseFee) surfaced in the HUD and fed to the altar's flare.
 

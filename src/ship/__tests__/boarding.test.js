@@ -297,7 +297,7 @@ describe('ships keep pace with the live chain', () => {
     for (let i = 0; i < 90; i++) {
       engine.pushVessel(block({ number: 8000 + i, hash: `0xp${i}`, transactionCount: 30 }))
       pump(0.3)
-      // Parity while running: the harbour never falls more than a breath
+      // Parity while running: the Odyssey never falls more than a breath
       // behind the tip, so hull numbers advance with the HUD block number.
       expect(engine.getSnapshot().stats.queueDepth).toBeLessThanOrEqual(6)
     }

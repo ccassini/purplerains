@@ -1,5 +1,5 @@
 /**
- * Harbour engine: simulation, render loop and the API the page talks to.
+ * Odyssey engine: simulation, render loop and the API the page talks to.
  *
  * Nine berths abreast on the quay edge. Soldiers wait on the pier like a
  * mempool. Blocks enter from deep water and angle up to their berth. Overflow
@@ -20,7 +20,7 @@ import {
   drawSky, drawSea, drawFarShips, drawQuay, drawQuayProps, drawTemple,
   drawShips, drawGangplank, drawVignette,
   HOPLITE_W, HOPLITE_H, SHIP_W, SHIP_H,
-} from './harborScene'
+} from './odysseyScene'
 import { drawHoplites } from './hopliteRender'
 
 /** Quay muster — mempool on the pier; soldiers wait, they do not evaporate. */
@@ -28,20 +28,20 @@ const MAX_QUEUE = 96
 
 /**
  * Token bucket for the quay. Sized so a busy mempool can actually stage onto
- * the apron instead of skipping straight past the harbour.
+ * the apron instead of skipping straight past the Odyssey.
  */
 const INTAKE_PER_SEC = 36
 const INTAKE_BURST = 64
 /**
  * Queue depth beyond which the oldest blocks are folded straight into the
  * sailed count. 24 blocks is ~8 seconds of live cadence — the most backlog
- * the eye can watch drain without the harbour reading as a cartoon flood.
+ * the eye can watch drain without the Odyssey reading as a cartoon flood.
  */
 const CATCHUP_DEPTH = 24
 /**
  * Monad seals ~3 blocks/s (~330ms). Live feed often delivers a burst of three
  * in one React commit — releasing them all at once made a convoy of three.
- * Pace the harbour near live block time; accelerate when the queue falls behind.
+ * Pace the Odyssey near live block time; accelerate when the queue falls behind.
  */
 const BLOCK_INTERVAL = 0.30
 /** Catch-up when the queue is deep — still never dump a whole burst in one frame. */
@@ -50,7 +50,7 @@ const BLOCK_INTERVAL_MIN = 0.10
 const LANE_GAP = 36
 
 /**
- * Approach and departure are paced for a wide harbour: ships cross most of the
+ * Approach and departure are paced for a wide Odyssey: ships cross most of the
  * screen before they moor or leave, so the fleet reads as a procession rather
  * than a blink of hulls.
  */
@@ -92,7 +92,7 @@ const BOARD_INTERVAL = 0.04
 const LEAP_SPEED = 200
 /**
  * Mempool life on the quay. Soldiers wait for their block; they only walk off
- * when the harbour truly has nothing for them.
+ * when the Odyssey truly has nothing for them.
  */
 const QUAY_LIFE = 12
 const LEAVE_SPEED = 28
@@ -383,7 +383,7 @@ export function createShipEngine(canvas) {
     if (!blockQueue.length) return
 
     // Deep backlog: allow a short same-frame burst so a quiet tab / long dwell
-    // cannot leave the harbour permanently behind the chain.
+    // cannot leave the Odyssey permanently behind the chain.
     const budget = blockQueue.length >= 8 ? 3 : blockQueue.length >= 4 ? 2 : 1
     for (let n = 0; n < budget; n++) {
       if (!blockQueue.length) break
@@ -417,7 +417,7 @@ export function createShipEngine(canvas) {
     blockQueue.push(block)
     // Deep backlog (hidden tab, feed burst): the oldest blocks already sailed
     // in the real world — record them as sailed and keep the visible queue at
-    // a depth the harbour can stage at live cadence. Nothing is lost silently:
+    // a depth the Odyssey can stage at live cadence. Nothing is lost silently:
     // `sailed` moves, and the HUD block number stays truthful throughout.
     while (blockQueue.length > CATCHUP_DEPTH) {
       blockQueue.shift()
@@ -453,7 +453,7 @@ export function createShipEngine(canvas) {
    *
    * A poll returns a whole batch of settled transfers and the page stages them
    * in one pass, so without this every creature in the batch enters on the same
-   * column and they swim the harbour as one overlapping clump.
+   * column and they swim the Odyssey as one overlapping clump.
    */
   function lifeEntryX() {
     let x = surface.width + 4
@@ -470,7 +470,7 @@ export function createShipEngine(canvas) {
   function pushInflow(inflow) {
     const id = inflow?.id ? String(inflow.id).toLowerCase() : ''
     if (!id || seenInflows.has(id)) return false
-    // Cap before marking seen so a full harbour can still stage this id later.
+    // Cap before marking seen so a full Odyssey can still stage this id later.
     if (seaLife.length >= LIFE_MAX) return false
     seenInflows.add(id)
     if (seenInflows.size > 2000) {
@@ -639,7 +639,7 @@ export function createShipEngine(canvas) {
 
   function openBerth(block, slot) {
     // Blocks arrive from deep water (behind), then angle up to their berth —
-    // not spawned on the fairway mid-harbour.
+    // not spawned on the fairway mid-scene.
     const ship = makeShip(block, FLEET_Y, 'berth', slot)
     ship.x = offscreenEntryX()
     ship.y = FLEET_Y
@@ -978,7 +978,7 @@ export function createShipEngine(canvas) {
         else h.x += dx * Math.min(0.28, dt * 4.5)
         h.y = QUAY_FEET_Y
         // Torch burndown, and it is only truthful because `needCrew` is false:
-        // the flame gutters when the harbour genuinely has no berth wanting
+        // the flame gutters when the Odyssey genuinely has no berth wanting
         // crew, not merely because time passed.
         const held = heldByShip(h.hash)
         const left = QUAY_LIFE - (elapsed - h.bornAt)
@@ -1202,7 +1202,7 @@ export function createShipEngine(canvas) {
     raf = requestAnimationFrame(frame)
     if (document.visibilityState === 'hidden') { lastTs = ts; return }
     // Fixed-step catch-up. A single clamped dt made SIM time run slower than
-    // wall time whenever the frame rate fell below 20fps — the harbour then
+    // wall time whenever the frame rate fell below 20fps — the Odyssey then
     // drifted permanently behind the live chain, which is exactly the
     // ships-cannot-keep-up bug. Sub-stepping keeps sim time equal to wall
     // time down to 4fps; below that the remainder is dropped (a stall, not a

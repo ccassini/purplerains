@@ -27,7 +27,7 @@ import { BLOCK_TIME_MS } from '../utils/formatters'
 // =====================================================
 /**
  * Bounded sample of a block's own transactions, attached to the block entry at
- * fetch time. The harbour's boarding rule — a soldier boards only the ship
+ * fetch time. The Odyssey's boarding rule — a soldier boards only the ship
  * whose block contains its transaction — depends on this arriving WITH the
  * block: the tx flush timer publishes transactions ~130ms after the block
  * commits, so anything derived from the transactions feed races and loses.
@@ -81,7 +81,7 @@ const WS_WATCHDOG_TICK_MS = 2000
 const WS_RECONNECT_DELAY_MS = 5000
 const STALE_WS_RECONNECT_DELAY_MS = 1000
 // Continuity: on a WS block-number jump > 1, backfill at most this many
-// missed blocks so no sealed block silently vanishes from the harbour.
+// missed blocks so no sealed block silently vanishes from the Odyssey.
 const GAP_BACKFILL_MAX = 10
 // One delayed retry when getBlock returns null — a load-balanced node can
 // lag the announcing node by a few hundred ms.

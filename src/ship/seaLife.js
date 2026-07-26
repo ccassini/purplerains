@@ -111,7 +111,7 @@ const DOLPHIN_FLUKE = [
  * detail.
  *
  * All three of the pod face LEFT, the direction every moving thing in this
- * harbour travels, and all three are LIGHTER than the water they cross. The
+ * Odyssey travels, and all three are LIGHTER than the water they cross. The
  * far sea band is seaFar/seaHorizon (#2a1c52..#3a2668); anything darker reads
  * as a hole punched in the sea rather than an animal on it.
  */

@@ -1,5 +1,5 @@
 /**
- * Draws the Odyssey harbour. Pure rendering — every function takes state and
+ * Draws the Odyssey Odyssey. Pure rendering — every function takes state and
  * paints, so the simulation in engine.js stays independent of how it looks.
  *
  * Troy-wide panorama: a deep buffer, the quay held high so a vast band of
@@ -55,7 +55,7 @@ export const BERTH_ROWS = 1
 /** Unused with a single row; kept for berthY math. */
 export const BERTH_ROW_GAP = 0
 
-export const HARBOUR_NAME = 'MONAD ODYSSEY'
+export const ODYSSEY_NAME = 'MONAD ODYSSEY'
 /** Right edge of the queue — keep a little air before the Pharos, not a long march. */
 export const QUEUE_RIGHT_PAD = 28
 
@@ -332,7 +332,7 @@ export function drawFarShips(ctx, w, t) {
  * walking surface, the soldiers' feet and the berth line are untouched.
  *
  * The repeating masonry is baked once into a 90px tile (the berth pitch, so
- * the pattern breathes with the harbour's own rhythm) and blitted across —
+ * the pattern breathes with the Odyssey's own rhythm) and blitted across —
  * thirteen drawImages instead of a few hundred fillRects per frame.
  */
 /**
@@ -476,8 +476,8 @@ export function drawTemple(ctx, w, t, burnGlow = 0) {
   }
 }
 
-/** Harbour name board, standing on the quay beside the colonnade. */
-export function drawSignpost(ctx, label = HARBOUR_NAME) {
+/** Odyssey name board, standing on the quay beside the colonnade. */
+export function drawSignpost(ctx, label = ODYSSEY_NAME) {
   const boardW = measurePixelText(label) + 12
   // East of the sanctuary: temple + altar own the first ~110px of the quay.
   const x = 116

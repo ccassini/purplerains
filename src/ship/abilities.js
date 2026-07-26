@@ -189,7 +189,7 @@ export const ABILITIES = [
     when: (h) => h.rank === RANK_ARCHON && (h.state === 'queued' || h.state === 'leaving'),
     paint: (ctx, h, t) => {
       // Warm light on the marble, breathing. An Archon gets more fire on the
-      // stone rather than a shadow — nothing else in this harbour casts one.
+      // stone rather than a shadow — nothing else in this Odyssey casts one.
       const k = (Math.sin((t / 1.4) * Math.PI * 2 + h.traits.bob) + 1) * 0.5
       ctx.fillStyle = k > 0.5 ? PAL.bronze : PAL.bronzeDark
       ctx.fillRect(h.x + 2, h.y + 16, 7, 1)
