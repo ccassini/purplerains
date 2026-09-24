@@ -1,95 +1,28 @@
-import { MONAD_DEX_ROUTERS, MONAD_RPC_ENDPOINTS, MONAD_STABLECOINS } from '../config/monadNetwork'
+import { MONAD_RPC_ENDPOINTS } from '../config/monadNetwork'
 
-const COINGECKO_URL = 'https://api.coingecko.com/api/v3/coins/agora-dollar?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false'
-const CHAIN_REGISTRY_URL = 'https://chainid.network/chains.json'
-const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-const TARGET_CITY_COUNT = 96
-const RPC_TIMEOUT_MS = 4500
+export const AGORA_DEPLOYMENTS_SOURCE = 'https://docs.agora.finance/developer/contract-deployments'
 const AUSD_EVM_CONTRACT = '0x00000000efe302beaa2b3e6e1b18d08d69a9012a'
-const DEFAULT_LOG_RANGE = 1200
-const MONAD_LOG_RANGE = 90
-const INITIAL_LOOKBACK = 180
-const MAX_LOG_BATCHES_PER_CHAIN = 5
-const RPC_CACHE_TTL_MS = 120000
+const ERC20_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 const ERC20_DECIMALS_SELECTOR = '0x313ce567'
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const TARGET_CITY_COUNT = 96
+const RPC_TIMEOUT_MS = 3000
+const CHAIN_TIMEOUT_MS = 6500
+const MAX_SEEN_LOGS = 20_000
 
-const PLATFORM_ALIASES = {
-  ethereum: ['ethereum mainnet', 'ethereum'],
-  base: ['base'],
-  optimism: ['optimism'],
-  arbitrum: ['arbitrum one', 'arbitrum'],
-  'arbitrum-one': ['arbitrum one', 'arbitrum'],
-  polygon: ['polygon mainnet', 'polygon'],
-  'polygon-pos': ['polygon mainnet', 'polygon'],
-  avalanche: ['avalanche c-chain', 'avalanche'],
-  bsc: ['bnb smart chain mainnet', 'binance smart chain'],
-  'binance-smart-chain': ['bnb smart chain mainnet', 'binance smart chain'],
-  fantom: ['fantom opera', 'fantom'],
-  celo: ['celo'],
-  mantle: ['mantle'],
-  linea: ['linea'],
-  scroll: ['scroll'],
-  zksync: ['zksync era'],
-  'zksync-era': ['zksync era'],
-}
-
-// User-provided chain scope + preferred RPC endpoints.
-const CHAIN_SCOPE = {
-  ethereum: {
-    labels: ['ethereum mainnet', 'ethereum'],
-    chainId: 1,
-    evm: true,
-    rpcs: ['https://ethereum.publicnode.com', 'https://rpc.flashbots.net'],
-  },
-  monad: {
-    labels: ['monad'],
-    chainId: 143,
-    evm: true,
-    rpcs: ['https://rpc.monad.xyz'],
-  },
-  avalanche: {
-    labels: ['avalanche c-chain', 'avalanche'],
-    chainId: 43114,
-    evm: true,
-    rpcs: ['https://api.avax.network/ext/bc/C/rpc'],
-  },
-  katana: {
-    labels: ['katana'],
-    chainId: 747474,
-    evm: true,
-    rpcs: [],
-  },
-  immutable_zkevm: {
-    labels: ['immutable zkevm', 'immutable zkevm mainnet', 'immutable'],
-    chainId: 13371,
-    evm: true,
-    rpcs: [],
-  },
-  sui: {
-    labels: ['sui'],
-    chainId: null,
-    evm: false,
-    rpcs: ['https://fullnode.mainnet.sui.io'],
-  },
-  mantle: {
-    labels: ['mantle'],
-    chainId: 5000,
-    evm: true,
-    rpcs: ['https://rpc.mantle.xyz'],
-  },
-  polygon: {
-    labels: ['polygon mainnet', 'polygon'],
-    chainId: 137,
-    evm: true,
-    rpcs: ['https://polygon-rpc.com'],
-  },
-  solana: {
-    labels: ['solana'],
-    chainId: null,
-    evm: false,
-    rpcs: ['https://api.mainnet-beta.solana.com'],
-  },
-}
+// Explicit mainnet deployments from Agora's own registry, verified 2026-09-24.
+// The identical address is intentional; no deployment is inferred from a chain-name alias.
+export const AGORA_CHAINS = [
+  { chainId: 1, chainName: 'Ethereum', platform: 'ethereum', rpcs: ['https://ethereum.publicnode.com', 'https://rpc.flashbots.net'], explorerUrl: 'https://etherscan.io' },
+  { chainId: 143, chainName: 'Monad', platform: 'monad', rpcs: [...MONAD_RPC_ENDPOINTS], explorerUrl: 'https://monadvision.com' },
+  { chainId: 43114, chainName: 'Avalanche', platform: 'avalanche', rpcs: ['https://api.avax.network/ext/bc/C/rpc', 'https://avalanche-c-chain-rpc.publicnode.com'], explorerUrl: 'https://snowtrace.io' },
+  { chainId: 747474, chainName: 'Katana', platform: 'katana', rpcs: ['https://rpc.katana.network'], explorerUrl: 'https://katanascan.com' },
+  { chainId: 13371, chainName: 'Immutable', platform: 'immutable-zkevm', rpcs: ['https://rpc.immutable.com'], explorerUrl: 'https://explorer.immutable.com' },
+  { chainId: 5000, chainName: 'Mantle', platform: 'mantle', rpcs: ['https://rpc.mantle.xyz'], explorerUrl: 'https://mantlescan.xyz' },
+  { chainId: 137, chainName: 'Polygon', platform: 'polygon-pos', rpcs: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon-rpc.com'], explorerUrl: 'https://polygonscan.com' },
+  { chainId: 42161, chainName: 'Arbitrum', platform: 'arbitrum-one', rpcs: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'], explorerUrl: 'https://arbiscan.io' },
+  { chainId: 8453, chainName: 'Base', platform: 'base', rpcs: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'], explorerUrl: 'https://basescan.org' },
+].map((chain) => ({ ...chain, contractAddress: AUSD_EVM_CONTRACT, evm: true }))
 
 // Priority city set:
 // - globally recognizable tourist destinations
@@ -282,48 +215,6 @@ function normalize(s) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-function isMainnetLike(chain) {
-  const name = String(chain?.name || '').toLowerCase()
-  const shortName = String(chain?.shortName || '').toLowerCase()
-  if (chain?.testnet) return false
-  if ((chain?.status || '').toLowerCase() === 'deprecated') return false
-  if (name.includes('testnet') || name.includes('devnet')) return false
-  if (shortName.includes('testnet') || shortName.includes('devnet')) return false
-  return true
-}
-
-function isAllowedChain(chain) {
-  const n = normalize(chain?.name || '')
-  const s = normalize(chain?.shortName || '')
-  return Object.values(CHAIN_SCOPE).some(({ labels }) =>
-    labels.some((label) => {
-      const key = normalize(label)
-      return n === key || s === key || n.includes(key) || key.includes(n)
-    })
-  )
-}
-
-function getScopeEntryByChain(chain) {
-  const n = normalize(chain?.name || '')
-  const s = normalize(chain?.shortName || '')
-  return Object.values(CHAIN_SCOPE).find(({ labels }) =>
-    labels.some((label) => {
-      const key = normalize(label)
-      return n === key || s === key || n.includes(key) || key.includes(n)
-    })
-  ) || null
-}
-
-function getScopeEntryByPlatform(platform) {
-  const p = normalize(platform || '')
-  return Object.values(CHAIN_SCOPE).find(({ labels }) =>
-    labels.some((label) => {
-      const key = normalize(label)
-      return key === p || key.includes(p) || p.includes(key)
-    })
-  ) || null
-}
-
 function buildPriorityCities() {
   const out = []
   const used = new Set()
@@ -380,401 +271,286 @@ function buildPriorityCities() {
   return out.slice(0, TARGET_CITY_COUNT)
 }
 
-/** Never throws; returns fallback on network/CORS/rate-limit failures so AGORA pages still load. */
-async function fetchJsonSafe(url, signal, fallback, timeoutMs = 15000) {
-  const ctrl = new AbortController()
-  const tid = window.setTimeout(() => ctrl.abort(), timeoutMs)
-  const onParentAbort = () => ctrl.abort()
-  if (signal) {
-    if (signal.aborted) {
-      window.clearTimeout(tid)
-      return fallback
-    }
-    signal.addEventListener('abort', onParentAbort, { once: true })
-  }
-  try {
-    const r = await fetch(url, { signal: ctrl.signal })
-    if (!r.ok) return fallback
-    const data = await r.json()
-    return data ?? fallback
-  } catch {
-    return fallback
-  } finally {
-    window.clearTimeout(tid)
-    if (signal) signal.removeEventListener('abort', onParentAbort)
-  }
+function abortError() {
+  return new DOMException('Agora polling was cancelled', 'AbortError')
 }
 
-function uniq(arr) {
-  return [...new Set((arr || []).filter(Boolean))]
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortError()
 }
 
-function normalizeAddress(v) {
-  const s = String(v || '').trim().toLowerCase()
-  return /^0x[a-f0-9]{40}$/.test(s) ? s : null
-}
-
-function parseTopicAddress(topic) {
-  const t = String(topic || '')
-  if (!t.startsWith('0x') || t.length < 66) return null
-  return normalizeAddress(`0x${t.slice(-40)}`)
-}
-
-function hexToInt(value) {
-  try {
-    return Number(BigInt(value || '0x0'))
-  } catch {
-    return 0
-  }
-}
-
-function hexToBigInt(value) {
-  try {
-    return BigInt(value || '0x0')
-  } catch {
-    return 0n
-  }
-}
-
-function formatUnits(value, decimals = 18, precision = 6) {
-  const d = Math.max(0, Math.min(36, Number(decimals) || 18))
-  const base = 10n ** BigInt(d)
-  const whole = value / base
-  const fracRaw = (value % base).toString().padStart(d, '0')
-  const frac = fracRaw.slice(0, precision).replace(/0+$/, '')
-  if (frac) return `${whole.toString()}.${frac}`
-  return whole.toString()
-}
-
-async function rpcCall(endpoint, method, params) {
+function linkedAbortSignal(parent, timeoutMs) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), RPC_TIMEOUT_MS)
+  const abort = () => controller.abort()
+  if (parent?.aborted) abort()
+  else parent?.addEventListener('abort', abort, { once: true })
+  const timer = timeoutMs ? setTimeout(abort, timeoutMs) : null
+  return { controller, signal: controller.signal, dispose() { if (timer) clearTimeout(timer); parent?.removeEventListener('abort', abort) } }
+}
+
+function normalizeAddress(value) {
+  const address = String(value || '').toLowerCase()
+  return /^0x[a-f0-9]{40}$/.test(address) ? address : null
+}
+
+function quantity(value) {
+  if (typeof value !== 'string' || !/^0x[0-9a-f]+$/i.test(value)) throw new Error('Invalid RPC quantity')
+  const number = Number(BigInt(value))
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error('RPC quantity is outside the supported range')
+  return number
+}
+
+const toHex = (number) => `0x${number.toString(16)}`
+
+async function rpcCall(endpoint, method, params, parentSignal) {
+  throwIfAborted(parentSignal)
+  const request = linkedAbortSignal(parentSignal, RPC_TIMEOUT_MS)
   try {
-    const r = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      signal: controller.signal,
+    const response = await fetch(endpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: request.signal,
     })
-    if (!r.ok) throw new Error(`RPC ${method} failed (${r.status})`)
-    const j = await r.json()
-    if (j?.error) throw new Error(j.error.message || `RPC error on ${method}`)
-    return j?.result
-  } finally {
-    clearTimeout(timer)
+    if (!response.ok) throw new Error(`RPC request failed (${response.status})`)
+    const json = await response.json()
+    throwIfAborted(parentSignal)
+    if (json?.error) throw new Error(json.error.message || 'RPC request failed')
+    if (json?.result == null) throw new Error('RPC returned no result')
+    return json.result
+  } finally { request.dispose() }
+}
+
+function formatTokenAmount(value, decimals) {
+  if (decimals === 0) return value.toString()
+  const base = 10n ** BigInt(decimals)
+  const fraction = (value % base).toString().padStart(decimals, '0').replace(/0+$/, '')
+  return `${value / base}${fraction ? `.${fraction}` : ''}`
+}
+
+function parseTransfer(log, chain, decimals, receivedAt, historical) {
+  if (log?.removed || normalizeAddress(log?.address) !== chain.contractAddress || log?.topics?.[0]?.toLowerCase() !== ERC20_TRANSFER_TOPIC) return null
+  if (log.topics.length !== 3 || !log.topics.slice(1).every((topic) => /^0x0{24}[0-9a-f]{40}$/i.test(topic)) || !/^0x[0-9a-f]{64}$/i.test(log.data) || !/^0x[0-9a-f]{64}$/i.test(log.transactionHash)) throw new Error('RPC returned an incomplete AUSD transfer')
+  const from = normalizeAddress(`0x${log.topics[1].slice(-40)}`)
+  const to = normalizeAddress(`0x${log.topics[2].slice(-40)}`)
+  const amountRaw = BigInt(log.data)
+  const amountDisplay = formatTokenAmount(amountRaw, decimals)
+  const amount = Number(amountDisplay)
+  const txHash = log.transactionHash.toLowerCase()
+  const logIndex = quantity(log.logIndex)
+  return {
+    id: `${chain.chainId}:${txHash}:${logIndex}`, txHash, logIndex, blockNumber: quantity(log.blockNumber),
+    from, to, amount: Number.isFinite(amount) ? amount : null, amountDisplay, amountRaw: amountRaw.toString(), decimals,
+    kind: from === ZERO_ADDRESS ? 'mint' : to === ZERO_ADDRESS ? 'burn' : 'transfer',
+    chainId: chain.chainId, chainName: chain.chainName, receivedAt, historical,
+    explorerUrl: chain.explorerUrl, transactionUrl: `${chain.explorerUrl}/tx/${txHash}`,
   }
 }
 
-async function pickWorkingRpc(endpoints) {
-  for (const ep of endpoints) {
+/** Scene metadata is local; market-price and chain-list services cannot delay the globe. */
+export async function fetchAgoraData(signal) {
+  throwIfAborted(signal)
+  return {
+    logo: '/ausd.png', symbol: 'AUSD', name: 'Agora Dollar', marketCapUsd: null,
+    cities: buildPriorityCities(), chains: AGORA_CHAINS.map((chain) => ({ ...chain, rpcs: [...chain.rpcs] })),
+  }
+}
+
+function positiveInteger(value, fallback, max = 100_000) {
+  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, max) : fallback
+}
+
+/**
+ * One poller per mounted scene. Cursor, RPC health, metadata, and overflow queues
+ * are isolated. Successful log ranges commit into a queue; only returned rows
+ * are removed, so cancellation, failed later batches, and UI limits lose no logs.
+ */
+export function createAgoraPoller(chains, defaults = {}) {
+  const registry = new Map(AGORA_CHAINS.map((chain) => [chain.chainId, chain]))
+  const candidates = []
+  const ids = new Set()
+  for (const chain of chains || []) {
+    const verified = registry.get(Number(chain.chainId))
+    if (!verified || chain.evm === false || ids.has(verified.chainId) || normalizeAddress(chain.contractAddress) !== verified.contractAddress) continue
+    const rpcs = [...new Set((chain.rpcs || verified.rpcs).filter((rpc) => typeof rpc === 'string' && /^https?:\/\//.test(rpc)))]
+    if (!rpcs.length) continue
+    candidates.push({ ...verified, rpcs })
+    ids.add(verified.chainId)
+  }
+  const makeStates = () => candidates.map((chain) => ({
+    chain, rpc: null, verifiedRpcs: new Set(), decimals: null, lastScanned: null, latest: null, maxRange: null,
+    pending: [], seen: new Set(), lastSuccessAt: null, error: null, retryAt: 0, failures: 0,
+  }))
+  let states = makeStates()
+  let inFlight = null
+  let activeController = null
+  let generation = 0
+
+  async function request(state, method, params, signal) {
+    const endpoints = [...new Set([state.rpc, ...state.chain.rpcs].filter(Boolean))].slice(0, 2)
+    let error
+    for (const endpoint of endpoints) {
+      throwIfAborted(signal)
+      try {
+        if (!state.verifiedRpcs.has(endpoint)) {
+          if (quantity(await rpcCall(endpoint, 'eth_chainId', [], signal)) !== state.chain.chainId) throw new Error('RPC is connected to the wrong chain')
+          state.verifiedRpcs.add(endpoint)
+        }
+        const result = await rpcCall(endpoint, method, params, signal)
+        state.rpc = endpoint
+        return result
+      } catch (failure) { error = failure }
+    }
+    throw error || new Error('No RPC endpoint is available')
+  }
+
+  async function scan(state, options, signal) {
+    if (Date.now() < state.retryAt) return false
+    const round = linkedAbortSignal(signal, CHAIN_TIMEOUT_MS)
     try {
-      await rpcCall(ep, 'eth_blockNumber', [])
-      return ep
-    } catch {
-      // continue
+      const latest = quantity(await request(state, 'eth_blockNumber', [], round.signal))
+      state.latest = latest
+      if (state.lastScanned !== null && latest < state.lastScanned) throw new Error('RPC head is behind the last scanned block')
+      if (state.decimals === null) {
+        const decimals = quantity(await request(state, 'eth_call', [{ to: state.chain.contractAddress, data: ERC20_DECIMALS_SELECTOR }, 'latest'], round.signal))
+        if (decimals > 36) throw new Error('Unsupported AUSD decimal precision')
+        state.decimals = decimals
+      }
+      const lookback = Math.max(0, Number.isSafeInteger(options.initialLookback) ? options.initialLookback : 180)
+      let cursor = state.lastScanned === null ? Math.max(0, latest - lookback) : state.lastScanned + 1
+      let range = positiveInteger(options.blockWindow, state.chain.chainId === 143 ? 90 : 1200)
+      if (state.chain.chainId === 143) range = Math.min(range, 90)
+      if (state.maxRange !== null) range = Math.min(range, state.maxRange)
+      const batches = positiveInteger(options.maxLogBatchesPerChain, 5, 20)
+      const limit = positiveInteger(options.maxLogsPerChain, 60, 1000)
+      const historical = state.lastScanned === null || latest - state.lastScanned > range
+      for (let batch = 0; cursor <= latest && batch < batches && state.pending.length < limit; batch += 1) {
+        const toBlock = Math.min(cursor + range - 1, latest)
+        let logs
+        try {
+          logs = await request(state, 'eth_getLogs', [{ address: state.chain.contractAddress, fromBlock: toHex(cursor), toBlock: toHex(toBlock), topics: [ERC20_TRANSFER_TOPIC] }], round.signal)
+        } catch (error) {
+          if (range > 1 && /range|too many|response size|limit exceeded/i.test(error.message)) {
+            range = Math.max(1, Math.floor(range / 2))
+            state.maxRange = range
+            continue
+          }
+          throw error
+        }
+        throwIfAborted(round.signal)
+        if (!Array.isArray(logs)) throw new Error('RPC returned an invalid transfer list')
+        const receivedAt = Date.now()
+        const parsed = logs.map((log) => parseTransfer(log, state.chain, state.decimals, receivedAt, historical)).filter(Boolean)
+        if (parsed.some((row) => row.blockNumber < cursor || row.blockNumber > toBlock)) throw new Error('RPC returned transfers outside the requested block range')
+        parsed.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex)
+        for (const row of parsed) {
+          if (state.seen.has(row.id)) continue
+          state.pending.push(row)
+          state.seen.add(row.id)
+        }
+        while (state.seen.size > MAX_SEEN_LOGS) state.seen.delete(state.seen.values().next().value)
+        state.lastScanned = toBlock
+        cursor = toBlock + 1
+      }
+      if (state.lastScanned !== null) state.lastSuccessAt = Date.now()
+      state.failures = 0
+      state.retryAt = 0
+      state.error = null
+      return state.lastScanned !== null
+    } catch (error) {
+      if (signal?.aborted) throw abortError()
+      state.failures += 1
+      state.error = error.name === 'AbortError' ? 'RPC timed out' : error.message || 'RPC unavailable'
+      const retryDelay = typeof options.retryDelayMs === 'number' && options.retryDelayMs >= 0 ? options.retryDelayMs : 3000
+      state.retryAt = Date.now() + Math.min(30_000, retryDelay * 2 ** Math.min(state.failures - 1, 5))
+      return false
+    } finally { round.dispose() }
+  }
+
+  function status(state, pendingCount = state.pending.length) {
+    const catchingUp = pendingCount > 0 || (state.lastScanned !== null && state.latest !== null && state.lastScanned < state.latest)
+    return {
+      chainId: state.chain.chainId, chainName: state.chain.chainName, explorerUrl: state.chain.explorerUrl,
+      status: state.error ? 'error' : state.lastSuccessAt === null ? 'connecting' : catchingUp ? 'catching-up' : 'live',
+      lastSuccessAt: state.lastSuccessAt, error: state.error, latestBlock: state.latest,
+      lastScannedBlock: state.lastScanned, backlogTransfers: pendingCount, rpc: state.rpc,
     }
   }
-  return null
-}
-
-const rpcCache = new Map()
-const tokenDecimalsCache = new Map()
-
-async function pickWorkingRpcCached(cacheKey, endpoints) {
-  const now = Date.now()
-  const cached = rpcCache.get(cacheKey)
-  if (cached && now - cached.ts < RPC_CACHE_TTL_MS && endpoints.includes(cached.rpc)) {
-    return cached.rpc
-  }
-  const rpc = await pickWorkingRpc(endpoints)
-  if (rpc) rpcCache.set(cacheKey, { rpc, ts: now })
-  return rpc
-}
-
-async function getTokenDecimalsCached(rpc, contract) {
-  const key = `${rpc}|${contract}`
-  const cached = tokenDecimalsCache.get(key)
-  if (cached != null) return cached
-  try {
-    const result = await rpcCall(rpc, 'eth_call', [{ to: contract, data: ERC20_DECIMALS_SELECTOR }, 'latest'])
-    const value = parseInt(result || '0x12', 16)
-    const decimals = Number.isFinite(value) && value >= 0 && value <= 36 ? value : 18
-    tokenDecimalsCache.set(key, decimals)
-    return decimals
-  } catch {
-    tokenDecimalsCache.set(key, 18)
-    return 18
-  }
-}
-
-let chainPollCursor = 0
-const chainLogState = new Map()
-
-function getChainStateKey(ch, contract) {
-  return `${String(ch?.chainId ?? 'na')}:${normalize(ch?.chainName || ch?.platform || '')}:${contract || ''}`
-}
-
-async function fetchTransferLogsIncremental(ch, contract, rpc, blockWindow) {
-  const latestHex = await rpcCall(rpc, 'eth_blockNumber', [])
-  const latest = parseInt(latestHex, 16)
-  if (!Number.isFinite(latest) || latest < 0) return { latest: 0, logs: [] }
-
-  const key = getChainStateKey(ch, contract)
-  const prev = chainLogState.get(key) || { lastScanned: 0 }
-  const maxRange = Number(ch?.chainId) === 143 ? MONAD_LOG_RANGE : Math.max(100, blockWindow || DEFAULT_LOG_RANGE)
-  const startFrom = prev.lastScanned > 0
-    ? Math.min(prev.lastScanned + 1, latest)
-    : Math.max(0, latest - INITIAL_LOOKBACK)
-
-  let cursor = startFrom
-  let batches = 0
-  const out = []
-
-  while (cursor <= latest && batches < MAX_LOG_BATCHES_PER_CHAIN) {
-    const to = Math.min(cursor + maxRange, latest)
-    const logs = await rpcCall(rpc, 'eth_getLogs', [{
-      address: contract,
-      fromBlock: `0x${cursor.toString(16)}`,
-      toBlock: `0x${to.toString(16)}`,
-      topics: [ERC20_TRANSFER_TOPIC],
-    }])
-    if (Array.isArray(logs) && logs.length) out.push(...logs)
-    cursor = to + 1
-    batches += 1
-  }
-
-  chainLogState.set(key, { lastScanned: latest, updatedAt: Date.now() })
-  return { latest, logs: out }
-}
-
-const FALLBACK_COIN = {
-  symbol: 'ausd',
-  name: 'Agora Dollar',
-  image: { large: '', small: '' },
-  platforms: {},
-  market_data: { market_cap: { usd: null } },
-}
-
-export async function fetchAgoraData(signal) {
-  const [coinRaw, chainsRaw] = await Promise.all([
-    fetchJsonSafe(COINGECKO_URL, signal, FALLBACK_COIN),
-    fetchJsonSafe(CHAIN_REGISTRY_URL, signal, []),
-  ])
-
-  const coin = coinRaw && typeof coinRaw === 'object' ? coinRaw : FALLBACK_COIN
-  const chains = Array.isArray(chainsRaw) ? chainsRaw : []
-
-  const cities = buildPriorityCities()
-
-  const platforms = coin?.platforms || {}
-  const contracts = Object.entries(platforms)
-    .map(([platform, address]) => ({
-      platform,
-      address: String(address || '').trim(),
-    }))
-    .filter(v => /^0x[a-fA-F0-9]{40}$/.test(v.address))
-
-  const chainRows = chains
-    .map((ch) => {
-      const rpcs = uniq(
-        (ch.rpc || []).filter((u) => typeof u === 'string' && u.startsWith('http') && !u.includes('${'))
-      )
-      return {
-        chainId: ch.chainId,
-        name: ch.name,
-        shortName: ch.shortName,
-        testnet: !!ch.testnet,
-        status: ch.status || 'active',
-        rpcs,
-      }
-    })
-    .filter(v => v.rpcs.length > 0 && isMainnetLike(v) && isAllowedChain(v))
-
-  const mappedChains = contracts.map((c) => {
-    const key = normalize(c.platform)
-    const aliases = PLATFORM_ALIASES[c.platform] || PLATFORM_ALIASES[key] || [c.platform]
-    const aliasNorm = aliases.map(normalize)
-    const chain = chainRows.find((ch) => {
-      const nn = normalize(ch.name)
-      const sn = normalize(ch.shortName)
-      return aliasNorm.some(a => nn.includes(a) || sn === a)
-    })
-    const scopeEntry = chain ? getScopeEntryByChain(chain) : (getScopeEntryByPlatform(c.platform) || getScopeEntryByPlatform(aliases[0]))
-    return chain ? {
-      platform: c.platform,
-      contractAddress: (scopeEntry?.evm === false ? c.address : AUSD_EVM_CONTRACT),
-      chainName: chain.name,
-      chainId: scopeEntry?.chainId ?? chain.chainId,
-      rpcs: uniq(scopeEntry?.rpcs?.length ? scopeEntry.rpcs : chain.rpcs),
-      evm: scopeEntry?.evm !== false,
-    } : null
-  }).filter(Boolean)
-
-  // Ensure scoped chains are present even if CoinGecko platform map is incomplete.
-  for (const chain of chainRows) {
-    const scopeEntry = getScopeEntryByChain(chain)
-    if (!scopeEntry) continue
-    const targetId = scopeEntry.chainId ?? chain.chainId
-    const exists = mappedChains.some((m) =>
-      Number(m.chainId) === Number(targetId) || normalize(m.chainName) === normalize(chain.name)
-    )
-    if (exists) continue
-    mappedChains.push({
-      platform: chain.shortName || chain.name,
-      contractAddress: scopeEntry.evm ? AUSD_EVM_CONTRACT : null,
-      chainName: chain.name,
-      chainId: targetId,
-      rpcs: uniq(scopeEntry.rpcs?.length ? scopeEntry.rpcs : chain.rpcs),
-      evm: scopeEntry.evm !== false,
-    })
-  }
-
-  // Ensure Monad AUSD is always included for live flow.
-  const monadScope = CHAIN_SCOPE.monad
-  const monadContract = normalizeAddress(AUSD_EVM_CONTRACT || MONAD_STABLECOINS?.AUSD?.[0])
-  const hasMonad = mappedChains.some((c) => Number(c.chainId) === 143 || normalize(c.chainName).includes('monad'))
-  if (!hasMonad && monadScope && monadContract) {
-    mappedChains.push({
-      platform: 'monad',
-      contractAddress: monadContract,
-      chainName: 'Monad',
-      chainId: 143,
-      rpcs: uniq(monadScope.rpcs || MONAD_RPC_ENDPOINTS || []),
-      evm: true,
-    })
-  }
 
   return {
-    logo: coin?.image?.large || coin?.image?.small || '',
-    symbol: String(coin?.symbol || 'AUSD').toUpperCase(),
-    name: coin?.name || 'Agora Dollar',
-    marketCapUsd: coin?.market_data?.market_cap?.usd || null,
-    cities,
-    chains: mappedChains,
+    poll(options = {}) {
+      if (options.signal?.aborted) return Promise.reject(abortError())
+      if (inFlight) return inFlight
+      const config = { ...defaults, ...options }
+      const roundGeneration = generation
+      const roundStates = states
+      const linked = linkedAbortSignal(config.signal)
+      activeController = linked.controller
+      const promise = (async () => {
+        const limit = positiveInteger(config.maxLogsPerChain, 60, 1000)
+        const deliveries = new Array(roundStates.length)
+        const results = await Promise.all(roundStates.map(async (state, index) => {
+          const scanned = await scan(state, config, linked.signal)
+          throwIfAborted(linked.signal)
+          if (roundGeneration !== generation) throw abortError()
+          const rows = state.pending.slice(0, limit)
+          const delivery = { rows, consumed: false }
+          deliveries[index] = delivery
+          // Publish each chain immediately. A slow or unavailable RPC must not
+          // hold healthy chains' events until the aggregate poll finishes.
+          if (typeof config.onChainResult === 'function') {
+            try {
+              const returned = config.onChainResult({
+                transfers: [...rows], chainStatus: [status(state, state.pending.length - rows.length)], scannedChains: scanned ? 1 : 0,
+              })
+              // This observer is synchronous. Isolate an accidentally returned
+              // rejected promise as well as ordinary callback exceptions.
+              if (returned?.then) Promise.resolve(returned).catch(() => {})
+              state.pending.splice(0, rows.length)
+              delivery.consumed = true
+            } catch {
+              // The final result remains a delivery path if the observer fails.
+            }
+          }
+          return scanned
+        }))
+        throwIfAborted(linked.signal)
+        if (roundGeneration !== generation) throw abortError()
+        const queues = deliveries.map((delivery, index) => {
+          if (!delivery.consumed) roundStates[index].pending.splice(0, delivery.rows.length)
+          return delivery.rows
+        })
+        const transfers = []
+        // Round-robin delivery is fair across chains. Heights from different
+        // chains have no shared chronology and must never rank the global feed.
+        for (let index = 0; index < limit; index += 1) {
+          for (const queue of queues) if (queue[index]) transfers.push(queue[index])
+        }
+        return { transfers, chainStatus: roundStates.map((state) => status(state)), scannedChains: results.filter(Boolean).length }
+      })().finally(() => {
+        linked.dispose()
+        if (activeController === linked.controller) activeController = null
+        if (inFlight === promise) inFlight = null
+      })
+      inFlight = promise
+      return promise
+    },
+    reset() {
+      generation += 1
+      activeController?.abort()
+      activeController = null
+      inFlight = null
+      states = makeStates()
+    },
+    getStatus() { return states.map((state) => status(state)) },
   }
 }
 
-export async function fetchMonadAusdTransfers({ blockWindow = 1200, maxLogs = 80 } = {}) {
-  const ausd = normalizeAddress(MONAD_STABLECOINS?.AUSD?.[0])
-  if (!ausd) return { rpc: null, contract: null, transfers: [] }
-
-  const rpc = await pickWorkingRpc(MONAD_RPC_ENDPOINTS || [])
-  if (!rpc) return { rpc: null, contract: ausd, transfers: [] }
-
-  try {
-    const latestHex = await rpcCall(rpc, 'eth_blockNumber', [])
-    const latest = parseInt(latestHex, 16)
-    const fromBlock = Math.max(0, latest - blockWindow)
-    const fromHex = `0x${fromBlock.toString(16)}`
-    const toHex = `0x${latest.toString(16)}`
-    const logs = await rpcCall(rpc, 'eth_getLogs', [{
-      address: ausd,
-      fromBlock: fromHex,
-      toBlock: toHex,
-      topics: [ERC20_TRANSFER_TOPIC],
-    }])
-
-    const dexSet = new Set((MONAD_DEX_ROUTERS || []).map((a) => normalizeAddress(a)).filter(Boolean))
-    const parsed = (logs || [])
-      .slice(-maxLogs)
-      .reverse()
-      .map((log) => {
-        const from = parseTopicAddress(log?.topics?.[1])
-        const to = parseTopicAddress(log?.topics?.[2])
-        const amountRaw = String(log?.data || '0x0')
-        const amount = hexToInt(amountRaw) / 1e18
-        const isSwap = !!(from && dexSet.has(from)) || !!(to && dexSet.has(to))
-        return {
-          txHash: log?.transactionHash || '',
-          blockNumber: parseInt(log?.blockNumber || '0x0', 16),
-          from,
-          to,
-          amount,
-          isSwap,
-          kind: isSwap ? 'swap' : 'transfer',
-        }
-      })
-      .filter((v) => v.from && v.to)
-
-    return { rpc, contract: ausd, transfers: parsed }
-  } catch {
-    return { rpc, contract: ausd, transfers: [] }
-  }
+/** One-shot compatibility entry point. Repeated consumers should retain createAgoraPoller(). */
+export function fetchAusdTransfersAllChains(chains, options = {}) {
+  return createAgoraPoller(chains, options).poll({ signal: options.signal })
 }
 
-export async function fetchAusdTransfersAllChains(
-  chains,
-  { blockWindow = DEFAULT_LOG_RANGE, maxLogsPerChain = 60, maxChainsPerPoll = 0 } = {}
-) {
-  const candidates = (chains || []).filter((c) =>
-    c?.evm !== false && normalizeAddress(c?.contractAddress) && Array.isArray(c?.rpcs) && c.rpcs.length > 0
-  )
-  if (!candidates.length) return { transfers: [], scannedChains: 0 }
-
-  const requested = Number(maxChainsPerPoll)
-  const count = requested > 0
-    ? Math.min(Math.max(1, requested), candidates.length)
-    : candidates.length
-  const batch = []
-  for (let i = 0; i < count; i++) {
-    const idx = (chainPollCursor + i) % candidates.length
-    batch.push(candidates[idx])
-  }
-  chainPollCursor = (chainPollCursor + count) % candidates.length
-
-  const dexSet = new Set((MONAD_DEX_ROUTERS || []).map((a) => normalizeAddress(a)).filter(Boolean))
-  const results = await Promise.allSettled(batch.map(async (ch) => {
-    const contract = normalizeAddress(ch.contractAddress)
-    if (!contract) return []
-    const cacheKey = `${String(ch.chainId || 'na')}:${normalize(ch.chainName || '')}`
-    const rpc = await pickWorkingRpcCached(cacheKey, ch.rpcs.slice(0, 8))
-    if (!rpc) return []
-    const decimals = await getTokenDecimalsCached(rpc, contract)
-
-    const { logs } = await fetchTransferLogsIncremental(ch, contract, rpc, blockWindow)
-
-    return (logs || [])
-      .reverse()
-      .map((log) => {
-        const from = parseTopicAddress(log?.topics?.[1])
-        const to = parseTopicAddress(log?.topics?.[2])
-          const amountRaw = hexToBigInt(String(log?.data || '0x0'))
-          const amount = hexToInt(String(log?.data || '0x0')) / 1e18
-          const amountDisplay = formatUnits(amountRaw, decimals, 6)
-        const isSwap = Number(ch.chainId) === 143 && (
-          !!(from && dexSet.has(from)) || !!(to && dexSet.has(to))
-        )
-        return {
-          txHash: log?.transactionHash || '',
-          blockNumber: parseInt(log?.blockNumber || '0x0', 16),
-          from,
-          to,
-          amount,
-            amountDisplay,
-          kind: isSwap ? 'swap' : 'transfer',
-          chainId: ch.chainId,
-          chainName: ch.chainName,
-            logIndex: parseInt(log?.logIndex || '0x0', 16),
-        }
-      })
-      .filter((v) => v.from && v.to && v.txHash)
-      .slice(0, maxLogsPerChain)
-  }))
-
-  const allRaw = results
-    .filter((r) => r.status === 'fulfilled')
-    .flatMap((r) => r.value || [])
-  const deduped = new Map()
-  for (const row of allRaw) {
-    const k = `${row.chainId || 'na'}:${row.txHash}:${row.logIndex ?? 0}`
-    if (!deduped.has(k)) deduped.set(k, row)
-  }
-  const all = [...deduped.values()]
-
-  return {
-    transfers: all
-      .sort((a, b) => (b.blockNumber || 0) - (a.blockNumber || 0))
-      .slice(0, maxLogsPerChain * Math.max(1, Math.min(count, 6))),
-    scannedChains: batch.length,
-  }
+export async function fetchMonadAusdTransfers({ blockWindow = 180, maxLogs = 80, signal } = {}) {
+  const monad = AGORA_CHAINS.find((chain) => chain.chainId === 143)
+  const result = await createAgoraPoller([monad], { initialLookback: blockWindow, maxLogsPerChain: maxLogs }).poll({ signal })
+  return { ...result, rpc: result.chainStatus[0]?.rpc ?? null, contract: monad.contractAddress }
 }

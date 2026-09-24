@@ -36,7 +36,8 @@
     "simple-icons": "^16.6.1",
     "three": "^0.183.2",
     "viem": "^2.44.4",
-    "wagmi": "^2.14.16"
+    "wagmi": "^2.14.16",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

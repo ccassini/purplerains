@@ -21,6 +21,10 @@ import {
   toNumberish,
 } from '../utils/txEnrichment'
 import { BLOCK_TIME_MS } from '../utils/formatters'
+import { createWsRpcBridge } from '../utils/wsJsonRpc'
+import { createBlockHeadFeed } from '../utils/blockHeadFeed'
+import { createBudgetedEnrichmentClient, createRequestBudget } from '../utils/requestBudget'
+import { prependTransactionBatch, patchTransactionEnrichment } from '../utils/transactionPublication'
 
 // =====================================================
 // BLOCK RECRUITS — the ship's own crew list
@@ -61,7 +65,6 @@ function buildRecruits(transactions) {
 const ACTIVE_POLL_INTERVAL = 1500 // HTTP fallback only (WS is primary)
 const INACTIVE_POLL_INTERVAL = 8000 // When tab is hidden: slow polling (save resources)
 const CACHE_DURATION_MS = 30000 // Cache block data for 30 seconds
-const MAX_REQUESTS_PER_MINUTE = 600 // Rate limit protection (~10/s; Monad produces ~3.33 blocks/s at 300ms)
 const REQUEST_COOLDOWN_MS = 120 // Minimum time between polls — must stay under the ~300ms block time
 
 // Transaction fan-in control. `transactions` is part of the context value, so
@@ -69,7 +72,7 @@ const REQUEST_COOLDOWN_MS = 120 // Minimum time between polls — must stay unde
 // fixed timer instead of per-N-transactions keeps that at a handful per second
 // regardless of how busy the chain is, and the buffer cap stops us analysing
 // (and receipt-enriching) a backlog the feed will never display.
-const TX_FLUSH_MS = 250
+const TX_FLUSH_MS = 80
 const TX_BUFFER_MAX = 120
 
 // WS resilience. A socket that stays "open" but silent (proxy idle timeout,
@@ -90,12 +93,6 @@ const NULL_BLOCK_RETRY_MS = 350
 // ERC-20 metadata cache cap — the one buffer that was unbounded.
 const TOKEN_METADATA_CACHE_MAX = 300
 
-// Priority tiers on the shared per-minute request budget: the block feed
-// itself must never be starved, so optional lookups yield first as the
-// window fills up (enrichment before proposer attribution before blocks).
-const BUDGET_RESERVE_PROPOSER = 0.9
-const BUDGET_RESERVE_ENRICH = 0.8
-
 const MonadContext = createContext(null)
 
 export const MonadProvider = ({ children }) => {
@@ -104,6 +101,9 @@ export const MonadProvider = ({ children }) => {
   const [connectionStatus, setConnectionStatus] = useState('connecting')
   const networkMode = 'live'
   const [latestBlock, setLatestBlock] = useState(null)
+  // World only needs a verified header and its proposer; full transaction
+  // payloads remain on latestBlock/blocks for consumers that need them.
+  const [latestHead, setLatestHead] = useState(null)
   const [blocks, setBlocks] = useState([]) // Block history for BlockFeed
   const [transactions, setTransactions] = useState([])
   const [txAnalyzer] = useState(() => new TransactionAnalyzer())
@@ -143,8 +143,7 @@ export const MonadProvider = ({ children }) => {
   const missedBlocksRef = useRef(0) // Track missed blocks for debugging
   
   // Rate limiting protection
-  const requestCountRef = useRef(0)
-  const requestWindowStartRef = useRef(Date.now())
+  const [requestBudget] = useState(() => createRequestBudget())
   const lastRequestTimeRef = useRef(0)
   const isTabActiveRef = useRef(true)
   
@@ -160,6 +159,9 @@ export const MonadProvider = ({ children }) => {
   const wsIntentionalCloseRef = useRef(false)
   /** Reconnect attempt counter — indexes into MONAD_WS_ENDPOINTS. */
   const wsAttemptRef = useRef(0)
+  /** Multiplexed JSON-RPC over the live newHeads socket (block+tx fetch). */
+  const wsRpcBridgeRef = useRef(createWsRpcBridge())
+  const blockHeadFeedRef = useRef(null)
   // Staleness watchdog: wall-clock time of the last published block.
   const lastBlockReceivedAtRef = useRef(0)
   const wsWatchdogIntervalRef = useRef(null)
@@ -178,21 +180,17 @@ export const MonadProvider = ({ children }) => {
 
   // ---- Rate Limiting & Optimization Helpers --------------------------------
 
-  // Budget-only check shared by the WS fan-out and the HTTP poll.
-  // `reserveFraction` reserves headroom: hasRequestBudget(0.8) passes only
-  // below 80% of the per-minute budget, so low-priority lookups (receipt
-  // enrichment, proposer attribution) yield before the block feed can 429.
-  const hasRequestBudget = useCallback((reserveFraction = 1) => {
-    const now = Date.now()
-
-    // Reset counter every minute
-    if (now - requestWindowStartRef.current > 60000) {
-      requestCountRef.current = 0
-      requestWindowStartRef.current = now
+  // Optional receipt/metadata calls have their own allowance, so they cannot
+  // spend the capacity required by the remaining live heads in this minute.
+  const hasRequestBudget = useCallback((tier = 'block') => {
+    const allowed = requestBudget.hasBudget(tier)
+    if (import.meta.env.DEV) {
+      document.documentElement.dataset.worldRpcBudget = JSON.stringify({
+        ...requestBudget.getSnapshot(), tier, allowed,
+      })
     }
-
-    return requestCountRef.current < MAX_REQUESTS_PER_MINUTE * reserveFraction
-  }, [])
+    return allowed
+  }, [requestBudget])
 
   // Check if we can make a polling request (budget + poll cooldown; WS-path
   // requests are paced by block arrival instead and only check the budget)
@@ -202,10 +200,10 @@ export const MonadProvider = ({ children }) => {
   }, [hasRequestBudget])
   
   // Track request made
-  const trackRequest = useCallback(() => {
-    requestCountRef.current++
+  const trackRequest = useCallback((tier = 'block') => {
+    requestBudget.track(tier)
     lastRequestTimeRef.current = Date.now()
-  }, [])
+  }, [requestBudget])
   
   // Get cached block or null
   const getCachedBlock = useCallback((blockNumber) => {
@@ -285,8 +283,6 @@ export const MonadProvider = ({ children }) => {
     })
   }, [])
 
-  const proposerSeqRef = useRef(0)
-
   // React 18 batches state updates within a single tick but NOT across
   // separate async resolutions — publishing the block now and patching the
   // proposer in later means two commits per block, i.e. every consumer of
@@ -299,17 +295,17 @@ export const MonadProvider = ({ children }) => {
   // is the exception, not the rule.
   const PROPOSER_RACE_MS = 120
 
-  const handleNewBlock = useCallback(async (blockData, proposerPromise = undefined, { isBackfill = false } = {}) => {
+  const handleNewBlock = useCallback(async (blockData, proposerPromise = undefined, { isBackfill = false, headFeed = blockHeadFeedRef.current } = {}) => {
+    if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
     const receivedAt = Date.now()
     // Feed liveness for the staleness watchdog.
     lastBlockReceivedAtRef.current = receivedAt
-    const seq = ++proposerSeqRef.current
 
     let promise
     if (proposerPromise !== undefined) {
       promise = proposerPromise
-    } else if (hasRequestBudget(BUDGET_RESERVE_PROPOSER)) {
-      trackRequest()
+    } else if (hasRequestBudget('proposer')) {
+      trackRequest('proposer')
       // Tag the call with the block number so attribution cannot slip to the
       // next block while the request is in flight.
       promise = fetchProposerValidatorId(null, { blockNumber: blockData.number })
@@ -317,6 +313,15 @@ export const MonadProvider = ({ children }) => {
       // Budget nearly spent: skip attribution rather than risk 429ing the feed.
       promise = Promise.resolve(null)
     }
+
+    // Also covers HTTP fallback. On WS this is a duplicate of the earlier
+    // header and the feed keeps its original receive time.
+    headFeed?.push({
+      number: blockData.number,
+      hash: blockData.hash,
+      timestamp: blockData.timestamp,
+      receivedAt,
+    }, promise)
 
     let proposerId = null
     let resolvedInTime = false
@@ -333,6 +338,8 @@ export const MonadProvider = ({ children }) => {
     } catch (e) {
       logger.warn('Failed to fetch proposer for block', blockData.number, e)
     }
+
+    if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
 
     const proposerValidator = proposerId ? getValidatorById(proposerId) : null
 
@@ -413,23 +420,27 @@ export const MonadProvider = ({ children }) => {
     // publish on it, patch the block in when it eventually settles.
     Promise.resolve(promise)
       .then((lateProposerId) => {
+        if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
         const lateProposerValidator = lateProposerId ? getValidatorById(lateProposerId) : null
-        if (lateProposerId && seq === proposerSeqRef.current) {
+        if (lateProposerId != null) {
           applyProposerToBlock(blockData.number, lateProposerId, lateProposerValidator)
         }
         updateLeaderboard(lateProposerValidator, receivedAt)
       })
       .catch((e) => {
+        if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
         logger.warn('Failed to fetch proposer for block (late)', blockData.number, e)
         updateLeaderboard(null, receivedAt)
       })
   }, [applyProposerToBlock, updateLeaderboard, hasRequestBudget, trackRequest])
 
   const flushTransactionBatch = useCallback(async () => {
-    if (transactionBatchRef.current.length === 0) return
+    if (!isPollingRef.current || transactionBatchRef.current.length === 0) return
 
     const batch = transactionBatchRef.current.splice(0)
     const client = connection?.client
+    const headFeed = blockHeadFeedRef.current
+    const isActive = () => isPollingRef.current && headFeed === blockHeadFeedRef.current
 
     // First pass: analyze all transactions
     const analyzedTxs = batch
@@ -438,8 +449,37 @@ export const MonadProvider = ({ children }) => {
 
     if (analyzedTxs.length === 0) return
 
-    // Second pass: enrich DeFi transactions in parallel (max 5 concurrent)
+    // Raw block evidence is ready now. A transfer must never wait for another
+    // transaction's receipt or token metadata before reaching the live feed.
+    setTransactions(prev => isActive() ? prependTransactionBatch(prev, analyzedTxs) : prev)
+
+    if (statsUpdateTimeoutRef.current) clearTimeout(statsUpdateTimeoutRef.current)
+    statsUpdateTimeoutRef.current = setTimeout(() => {
+      if (!isActive()) return
+      setStats(prev => {
+        if (!isActive()) return prev
+        const latestTx = analyzedTxs[0]
+        const latestGasPrice = Number(latestTx?.gasPrice)
+        return {
+          ...prev,
+          gasPrice: Number.isFinite(latestGasPrice) && latestGasPrice > 0
+            ? latestGasPrice : prev.gasPrice,
+          networkHash: latestTx?.hash
+            ? latestTx.hash.substring(0, 16) + '...' : prev.networkHash,
+        }
+      })
+    }, 100)
+
+    // Optional enrichment keeps the existing five-wide dispatch and budget.
+    // Its completion patches retained rows instead of publishing a late batch.
     if (client) {
+      // Gate each dispatched RPC, including token decimals/symbol reads.
+      // Counting once per enriched transaction understated provider load.
+      const enrichmentClient = createBudgetedEnrichmentClient(client, () => {
+        if (!isActive() || !hasRequestBudget('enrichment')) return false
+        trackRequest('enrichment')
+        return true
+      })
       const defiTxs = analyzedTxs.filter(tx => tx.category === 'defi' || tx.isDexTx)
       
       // Process in batches of 5 to avoid rate limiting
@@ -447,24 +487,28 @@ export const MonadProvider = ({ children }) => {
       for (let i = 0; i < defiTxs.length; i += batchSize) {
         // Enrichment is the lowest-priority consumer of the request budget:
         // an unenriched tx is honest, a 429-starved block feed is not.
-        if (!hasRequestBudget(BUDGET_RESERVE_ENRICH)) break
+        if (!isActive() || !hasRequestBudget('enrichment')) break
         const defiTxBatch = defiTxs.slice(i, i + batchSize)
         const enrichPromises = defiTxBatch.map(async (tx) => {
           try {
-            trackRequest()
             const enriched = await enrichDefiTransactionFromReceipt(
-              client,
+              enrichmentClient,
               tokenMetadataCacheRef.current,
               tx
             )
-            // Update the transaction in place
-            Object.assign(tx, enriched)
+            return enriched !== tx ? enriched : null
           } catch (err) {
             logger.error('Failed to enrich tx:', tx.hash, err.message)
+            return null
           }
         })
 
-        await Promise.allSettled(enrichPromises)
+        const settled = await Promise.allSettled(enrichPromises)
+        if (!isActive()) return
+        const patches = settled.flatMap(result => result.status === 'fulfilled' && result.value ? [result.value] : [])
+        if (patches.length) {
+          setTransactions(prev => isActive() ? patchTransactionEnrichment(prev, patches) : prev)
+        }
       }
 
       // Keep the token metadata cache bounded like every other buffer
@@ -475,33 +519,6 @@ export const MonadProvider = ({ children }) => {
       }
     }
 
-    setTransactions(prev => {
-      const updated = [...analyzedTxs, ...prev].slice(0, 500)
-      return updated
-    })
-
-    // Update stats with latest info
-    if (statsUpdateTimeoutRef.current) {
-      clearTimeout(statsUpdateTimeoutRef.current)
-    }
-
-    statsUpdateTimeoutRef.current = setTimeout(() => {
-      setStats(prev => {
-        const latestTx = analyzedTxs[0]
-        // tx gasPrice arrives as a formatted string — keep stats.gasPrice
-        // a NUMBER so arithmetic consumers never concatenate or NaN.
-        const latestGasPrice = Number(latestTx?.gasPrice)
-        return {
-          ...prev,
-          gasPrice: Number.isFinite(latestGasPrice) && latestGasPrice > 0
-            ? latestGasPrice
-            : prev.gasPrice,
-          networkHash: latestTx?.hash
-            ? latestTx.hash.substring(0, 16) + '...'
-            : prev.networkHash
-        }
-      })
-    }, 100)
   }, [connection, txAnalyzer, hasRequestBudget, trackRequest])
 
   const handleNewTransaction = useCallback(
@@ -526,7 +543,11 @@ export const MonadProvider = ({ children }) => {
   // Fetch one full block and feed it through the same pipeline as polling.
   // Used for WS-announced blocks, continuity gap-fill and the null-block
   // retry. Returns true when the block was published.
-  const fetchAndProcessBlock = useCallback(async (blockNumber, { isBackfill = false } = {}) => {
+  const fetchAndProcessBlock = useCallback(async (blockNumber, {
+    isBackfill = false,
+    proposerPromise: prefetchedProposer,
+    headFeed = blockHeadFeedRef.current,
+  } = {}) => {
     const client = connection?.client
     if (!client) return false
 
@@ -535,13 +556,33 @@ export const MonadProvider = ({ children }) => {
     // critical for keeping up with Monad's ~0.3s block time). The call is
     // tagged with the block number so attribution cannot slip a block, and
     // skipped entirely when the request budget is nearly spent.
-    let proposerPromise = Promise.resolve(null)
-    if (hasRequestBudget(BUDGET_RESERVE_PROPOSER)) {
-      trackRequest()
+    let proposerPromise = prefetchedProposer ?? Promise.resolve(null)
+    if (prefetchedProposer === undefined && hasRequestBudget('proposer')) {
+      trackRequest('proposer')
       proposerPromise = fetchProposerValidatorId(null, { blockNumber }).catch(() => null)
     }
 
     const fetchOnce = async () => {
+      if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return null
+      // Prefer the open WSS that announced this head — one RTT on the same
+      // provider, no HTTP dial. That's the lag that made swaps feel late.
+      const ws = wsRef.current
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          trackRequest()
+          const hex = `0x${Number(blockNumber).toString(16)}`
+          const raw = await wsRpcBridgeRef.current.callOn(
+            ws,
+            'eth_getBlockByNumber',
+            [hex, true],
+            3200,
+          )
+          if (raw) return raw
+        } catch (err) {
+          logger.warn(`WS block fetch ${blockNumber} failed, HTTP fallback:`, err.message)
+        }
+      }
+      if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return null
       try {
         trackRequest()
         return await client.getBlock({
@@ -555,6 +596,7 @@ export const MonadProvider = ({ children }) => {
     }
 
     let block = await fetchOnce()
+    if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return false
     if (!block) {
       // A load-balanced node can lag the announcing node — one delayed
       // retry before the block (and its crew) is dropped for good.
@@ -566,6 +608,8 @@ export const MonadProvider = ({ children }) => {
       logger.warn(`Block ${blockNumber} unavailable after retry (total missed: ${missedBlocksRef.current})`)
       return false
     }
+
+    if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return false
 
     const gasUsed = toNumberish(block.gasUsed)
     const gasLimit = toNumberish(block.gasLimit)
@@ -585,7 +629,7 @@ export const MonadProvider = ({ children }) => {
       // this block destroyed — the altar's offering.
       burnedMon: (gasUsed * toNumberish(block.baseFeePerGas)) / 1e18,
       miner: block.miner || null
-    }, proposerPromise, { isBackfill })
+    }, proposerPromise, { isBackfill, headFeed })
 
     if (block.transactions?.length > 0) {
       block.transactions.forEach(tx => {
@@ -619,6 +663,7 @@ export const MonadProvider = ({ children }) => {
 
   const pollForBlocks = useCallback(async () => {
     if (!connection) return
+    const headFeed = blockHeadFeedRef.current
     
     // Rate limiting check - skip if too many requests
     if (!canMakeRequest()) {
@@ -631,6 +676,7 @@ export const MonadProvider = ({ children }) => {
       if (!client) return
       const currentBlockNumberRaw = await client.getBlockNumber()
       const currentBlockNumber = normalizeBlockNumber(currentBlockNumberRaw)
+      if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
 
       if (
         lastBlockNumberRef.current === null ||
@@ -665,16 +711,18 @@ export const MonadProvider = ({ children }) => {
         }
 
         const fetchedBlocks = await Promise.all(blockPromises)
+        if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
 
         // Null getBlock (load-balanced node lag) must not drop a block
         // permanently — route it through the retrying single-block pipeline.
         fetchedBlocks.forEach((block, i) => {
           if (!block) {
-            fetchAndProcessBlock(fromBlock + i, { isBackfill: true })
+            fetchAndProcessBlock(fromBlock + i, { isBackfill: true, headFeed })
           }
         })
 
         for (const block of fetchedBlocks) {
+          if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
           if (!block || !block.transactions) continue
 
           const gasUsed = toNumberish(block.gasUsed)
@@ -701,7 +749,7 @@ export const MonadProvider = ({ children }) => {
             miner: block.miner || null
           }
 
-          handleNewBlock(blockData)
+          handleNewBlock(blockData, undefined, { headFeed })
 
           if (block.transactions && block.transactions.length > 0) {
             // Process transactions in smaller batches to avoid overwhelming the UI
@@ -742,7 +790,9 @@ export const MonadProvider = ({ children }) => {
           }
         }
 
-        lastBlockNumberRef.current = currentBlockNumber
+        // WS may have advanced the head while the HTTP body/transactions
+        // were loading. An older poll must never lower its dedupe watermark.
+        lastBlockNumberRef.current = Math.max(lastBlockNumberRef.current ?? currentBlockNumber, currentBlockNumber)
         consecutiveErrorsRef.current = 0
         
         // Speed up polling if we're catching up
@@ -753,6 +803,7 @@ export const MonadProvider = ({ children }) => {
         }
       }
     } catch (error) {
+      if (!isPollingRef.current || headFeed !== blockHeadFeedRef.current) return
       consecutiveErrorsRef.current += 1
       logger.error('Polling error:', error.message)
 
@@ -789,9 +840,14 @@ export const MonadProvider = ({ children }) => {
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
+        if (wsRef.current !== ws || !isPollingRef.current) {
+          ws.close()
+          return
+        }
         logger.log('WebSocket connected to Monad')
         // A successful dial re-arms the rotation at the primary for next time.
         wsAttemptRef.current = 0
+        wsRpcBridgeRef.current.resetIds()
         // Subscribe to new block headers
         ws.send(JSON.stringify({
           jsonrpc: '2.0',
@@ -803,9 +859,14 @@ export const MonadProvider = ({ children }) => {
       }
 
       ws.onmessage = async (event) => {
+        if (wsRef.current !== ws || !isPollingRef.current) return
         try {
           const data = JSON.parse(event.data)
-          
+
+          // JSON-RPC replies for eth_getBlockByNumber (and any other callOn)
+          // share this socket with newHeads — drain them first.
+          if (wsRpcBridgeRef.current.handleMessage(data)) return
+
           // Handle subscription confirmation
           if (data.id === 1 && data.result) {
             logger.log('Subscribed to newHeads:', data.result)
@@ -830,6 +891,21 @@ export const MonadProvider = ({ children }) => {
             // against THIS block instead of re-dispatching it.
             lastBlockNumberRef.current = blockNumber
 
+            // World propagation must not wait for a full transaction body.
+            // Share one block-pinned attribution lookup with the rich block
+            // pipeline, so this fast path adds no requests to the budget.
+            let proposerPromise = Promise.resolve(null)
+            if (hasRequestBudget('proposer')) {
+              trackRequest('proposer')
+              proposerPromise = fetchProposerValidatorId(null, { blockNumber }).catch(() => null)
+            }
+            blockHeadFeedRef.current?.push({
+              number: blockNumber,
+              hash: blockHeader.hash,
+              timestamp: toNumberish(blockHeader.timestamp) * 1000,
+              receivedAt: Date.now(),
+            }, proposerPromise)
+
             // Continuity gap-fill: a jump > 1 means headers were missed —
             // backfill the gap (bounded) so no sealed block vanishes.
             if (lastSeen !== null && blockNumber > lastSeen + 1) {
@@ -847,7 +923,7 @@ export const MonadProvider = ({ children }) => {
               }
             }
 
-            await fetchAndProcessBlock(blockNumber)
+            await fetchAndProcessBlock(blockNumber, { proposerPromise })
           }
         } catch (err) {
           logger.error('WebSocket message parse error:', err.message)
@@ -856,7 +932,7 @@ export const MonadProvider = ({ children }) => {
 
       ws.onerror = (error) => {
         logger.error('WebSocket error:', error)
-        useWsRef.current = false
+        if (wsRef.current === ws) useWsRef.current = false
       }
 
       ws.onclose = () => {
@@ -864,6 +940,7 @@ export const MonadProvider = ({ children }) => {
         if (isCurrent) {
           useWsRef.current = false
           wsRef.current = null
+          wsRpcBridgeRef.current.rejectAll(new Error('WebSocket closed'))
         }
 
         // A superseded or intentionally-closed socket must never reschedule:
@@ -890,7 +967,7 @@ export const MonadProvider = ({ children }) => {
       logger.error('Failed to create WebSocket:', err.message)
       return false
     }
-  }, [connection, fetchAndProcessBlock])
+  }, [connection, fetchAndProcessBlock, hasRequestBudget, trackRequest])
 
   // Always run HTTP polling as backup/supplement. A self-rescheduling
   // timeout chain (not setInterval) re-reads rateLimitDelayRef on every hop,
@@ -933,6 +1010,7 @@ export const MonadProvider = ({ children }) => {
       logger.warn(`No block for ${Date.now() - last}ms with WS open — failing over to HTTP and reconnecting WS`)
 
       const staleWs = wsRef.current
+      wsRpcBridgeRef.current.rejectAll(new Error('WebSocket stale'))
       wsRef.current = null // onclose sees a superseded socket → no double reconnect
       useWsRef.current = false
       try {
@@ -962,6 +1040,14 @@ export const MonadProvider = ({ children }) => {
     setIsConnected(true)
 
     isPollingRef.current = true
+    blockHeadFeedRef.current = createBlockHeadFeed(
+      head => setLatestHead(previous => {
+        if (!previous || previous.number < head.number) return head
+        if (previous.number > head.number || previous.proposerId != null) return previous
+        return { ...head, receivedAt: previous.receivedAt }
+      }),
+      getValidatorById,
+    )
     // Watchdog baseline: measure from session start so a socket that never
     // delivers a single block also trips the staleness failover.
     lastBlockReceivedAtRef.current = Date.now()
@@ -986,6 +1072,8 @@ export const MonadProvider = ({ children }) => {
       pollingIntervalRef.current = null
     }
     isPollingRef.current = false
+    blockHeadFeedRef.current?.close()
+    blockHeadFeedRef.current = null
 
     // Stop the staleness watchdog
     if (wsWatchdogIntervalRef.current) {
@@ -997,6 +1085,7 @@ export const MonadProvider = ({ children }) => {
     // onclose can observe it) guarantees teardown never reschedules a
     // reconnect — StrictMode's double mount must not leak sockets.
     wsIntentionalCloseRef.current = true
+    wsRpcBridgeRef.current.rejectAll(new Error('Block stream stopped'))
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
@@ -1017,10 +1106,11 @@ export const MonadProvider = ({ children }) => {
       txFlushTimerRef.current = 0
     }
 
-    flushTransactionBatch()
+    // A retired stream must not start receipt work or publish buffered rows.
+    transactionBatchRef.current = []
     
     logger.log(`Stopped real-time sync (missed blocks: ${missedBlocksRef.current})`)
-  }, [flushTransactionBatch])
+  }, [])
 
   // ---- Connection lifecycle ----------------------------------------------
 
@@ -1040,8 +1130,6 @@ export const MonadProvider = ({ children }) => {
         if (cancelled) return
 
         setConnection(monadConnection)
-        // start polling once connection is ready
-        startHttpPolling()
       } catch (error) {
         logger.error('Failed to connect to Monad mainnet RPC:', error)
         if (cancelled) return
@@ -1055,13 +1143,20 @@ export const MonadProvider = ({ children }) => {
 
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  // Connection initialization must not depend on stream callbacks: those
+  // callbacks change when setConnection installs the client. Combining both
+  // effects otherwise creates an endless connect → cleanup → connect loop.
+  useEffect(() => {
+    if (!connection) return
+    startHttpPolling()
+    return () => {
       stopHttpPolling()
-      if (statsUpdateTimeoutRef.current) {
-        clearTimeout(statsUpdateTimeoutRef.current)
-      }
       transactionBatchRef.current = []
     }
-  }, [startHttpPolling, stopHttpPolling])
+  }, [connection, startHttpPolling, stopHttpPolling])
 
   // ---- Tab Visibility Detection (Save resources when tab is hidden) -----
   useEffect(() => {
@@ -1120,13 +1215,14 @@ export const MonadProvider = ({ children }) => {
     connectionStatus,
     networkMode,
     latestBlock,
+    latestHead,
     blocks,
     validatorLeaderboard,
     transactions,
     stats,
     txAnalyzer,
     config: MONAD_MAINNET_CONFIG
-  }), [connection, isConnected, connectionStatus, networkMode, latestBlock, blocks, validatorLeaderboard, transactions, stats, txAnalyzer])
+  }), [connection, isConnected, connectionStatus, networkMode, latestBlock, latestHead, blocks, validatorLeaderboard, transactions, stats, txAnalyzer])
 
   return (
     <MonadContext.Provider value={value}>

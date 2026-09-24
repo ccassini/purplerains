@@ -77,10 +77,15 @@ const PLANK_SECONDS = 0.18
 const BERTH_WAIT_GAP = 18
 /**
  * Keep hulls alongside long enough that the front row usually shows all
- * MIN_ALONGSIDE ships loading at once — nine abreast.
+ * MIN_ALONGSIDE ships loading at once — nine abreast. Hard-capped: a berth
+ * never holds a hull past MAX_BERTH_DWELL (the old 2.8× long-dwell path
+ * stretched quiet berths past 1.9s).
  */
 const MIN_ALONGSIDE = 9
-const MIN_DWELL = 0.62
+/** Ceremonial dwell before seal may fire (plank time is added separately). */
+const MIN_DWELL = 1.02
+/** Absolute moored ceiling — fill and cast decision by this, never later. */
+const MAX_BERTH_DWELL = 1.20
 /** After seal, wait this long for any last leaps before casting off. */
 const STRAGGLER_GRACE = 0.15
 /**
@@ -106,8 +111,8 @@ const ABOARD_FADE = 0.22
 const NEAR_PLANK = 52
 /**
  * How far down the quay a called soldier will march to reach its plank.
- * Walk + leap tops out near ~1.1s at LEAP_SPEED; the seal honestly waits for
- * marchers (stillLeaping), so this bound is what caps a berth's worst dwell.
+ * Walk + leap must finish inside MAX_BERTH_DWELL; seal forces at the cap
+ * even if a late marcher is still mid-leap.
  */
 const MARCH_REACH = 260
 /** Standing room on the after deck: four ranks of four. */
@@ -331,15 +336,16 @@ export function createShipEngine(canvas) {
   }
 
   /**
-   * Mandatory alongside time shrinks under backlog. An idle harbour keeps the
-   * full ceremonial dwell; a harbour that is falling behind the chain turns
-   * hulls around as fast as the muster honestly allows.
+   * Mandatory alongside time shrinks under backlog. Idle Odyssey keeps the
+   * ceremonial dwell; backlog turns hulls sooner. Never exceeds
+   * MAX_BERTH_DWELL − PLANK_SECONDS so dwellDone itself stays ≤ 1200ms.
    */
   function effectiveDwell() {
     const n = blockQueue.length
-    if (n >= 3) return 0.30
-    if (n >= 1) return 0.45
-    return MIN_DWELL
+    const cap = MAX_BERTH_DWELL - PLANK_SECONDS
+    if (n >= 3) return Math.min(0.30, cap)
+    if (n >= 1) return Math.min(0.45, cap)
+    return Math.min(MIN_DWELL, cap)
   }
 
   /** Release spacing tightens under backlog so the tip of the chain is not orphaned. */
@@ -914,6 +920,7 @@ export function createShipEngine(canvas) {
         s.plank = Math.min(1, s.plank + dt / PLANK_SECONDS)
 
         const stillLeaping = s.passengers.some((h) => h.state === 'leaping' || h.state === 'marching')
+        const mooredFor = elapsed - s.mooredAt
         if (s.boarding) {
           if (s.plank >= 1 &&
               s.passengers.length < s.load &&
@@ -922,17 +929,18 @@ export function createShipEngine(canvas) {
           }
           // Stay alongside until the apron is populated. Relief may wait;
           // do not rush the front ship just to free a slot for a trio.
+          // Hard cap: never past MAX_BERTH_DWELL (1200ms), even mid-leap.
           const reliefWaiting = !!slotInbound(s.slot)
           const apronFull = alongsideCount() >= MIN_ALONGSIDE
-          const dwellDone = elapsed - s.mooredAt >= effectiveDwell() + PLANK_SECONDS
-          const longDwell = elapsed - s.mooredAt >= effectiveDwell() * 2.8 + PLANK_SECONDS
-          if (s.passengers.length >= s.load && !stillLeaping && (apronFull || dwellDone)) seal(s)
+          const dwellDone = mooredFor >= effectiveDwell() + PLANK_SECONDS
+          const atCap = mooredFor >= MAX_BERTH_DWELL
+          if (atCap) seal(s)
+          else if (s.passengers.length >= s.load && !stillLeaping && (apronFull || dwellDone)) seal(s)
           else if (s.plank >= 1 && !stillLeaping &&
-              ((apronFull && dwellDone && (reliefWaiting || elapsed - s.lastBoardAt >= BOARD_INTERVAL * 3))
-                || longDwell)) {
+              apronFull && dwellDone && (reliefWaiting || elapsed - s.lastBoardAt >= BOARD_INTERVAL * 3)) {
             seal(s)
           }
-        } else if (!stillLeaping || elapsed - s.sealedAt > STRAGGLER_GRACE) {
+        } else if (!stillLeaping || elapsed - s.sealedAt > STRAGGLER_GRACE || mooredFor >= MAX_BERTH_DWELL) {
           s.dock = 'casting'
         }
       } else if (s.dock === 'casting') {

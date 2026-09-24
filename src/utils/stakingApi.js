@@ -4,16 +4,18 @@
  */
 
 import { MONAD_MAINNET_CONFIG } from '../config/monadNetwork'
-import { fetchGmonadsValidatorsEpoch } from './gmonadsApi'
+import { parseEther } from 'viem'
 import { logger } from './logger'
 
 // Monad Staking Precompile Address
 const STAKING_PRECOMPILE_ADDRESS = '0x0000000000000000000000000000000000001000'
 
 // Monad Staking Constants (from official docs)
-const BLOCK_REWARD = 25 // MON per block
+export const STAKING_REWARD_MON = 18
+const BLOCK_REWARD = STAKING_REWARD_MON
 // Use app config for block time (more accurate & consistent)
-const BLOCK_TIME_MS = MONAD_MAINNET_CONFIG.blockTime || 300
+export const ASSUMED_BLOCK_TIME_MS = MONAD_MAINNET_CONFIG.blockTime || 300
+const BLOCK_TIME_MS = ASSUMED_BLOCK_TIME_MS
 const BLOCKS_PER_YEAR = Math.floor((365 * 24 * 60 * 60 * 1000) / BLOCK_TIME_MS)
 
 function formatMonNumberFromWei(balanceWei) {
@@ -46,28 +48,42 @@ let gmonadsStakingCache = {
 }
 
 export function computeStakingStatsFromGmonadsRows(rows) {
+  const unavailable = { totalStaked: null, activeStaked: null, grossApr: null, apy: null }
   try {
-    if (!Array.isArray(rows)) return { totalStaked: null, activeStaked: null, apy: null }
+    if (!Array.isArray(rows) || !rows.length) return unavailable
     let total = 0n
     let active = 0n
     for (const row of rows) {
-      const stake = BigInt(row?.stake ?? '0')
+      const stake = parseStakingMon(row?.stake)
       total += stake
       if (String(row?.validator_set_type || '').toLowerCase() === 'active') {
         active += stake
       }
     }
-    const totalStaked = Number(total)
-    const activeStaked = Number(active)
-    const apy = calculateAPY(totalStaked)
+    const totalStaked = formatMonNumberFromWei(total)
+    const activeStaked = formatMonNumberFromWei(active)
+    const grossApr = calculateAPR(activeStaked)
     return {
       totalStaked: Number.isFinite(totalStaked) ? totalStaked : null,
       activeStaked: Number.isFinite(activeStaked) ? activeStaked : null,
-      apy,
+      grossApr,
+      sourceUpdatedAt: rows.reduce((latest, row) => {
+        const timestamp = Date.parse(row.timestamp)
+        return Number.isFinite(timestamp) ? Math.max(latest ?? 0, timestamp) : latest
+      }, null),
+      // Compatibility only: this was always simple interest, never APY.
+      apy: grossApr,
     }
   } catch {
-    return { totalStaked: null, activeStaked: null, apy: null }
+    return unavailable
   }
+}
+
+export function parseStakingMon(value) {
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('Invalid staking amount')
+  const text = String(value ?? '')
+  if (!/^\d+(?:\.\d{1,18})?$/.test(text)) throw new Error('Invalid staking amount')
+  return parseEther(text)
 }
 
 /**
@@ -76,28 +92,37 @@ export function computeStakingStatsFromGmonadsRows(rows) {
 export async function getNetworkStakingStats(forceRefresh = false, network = 'mainnet') {
   const now = Date.now()
 
-  if (!forceRefresh && gmonadsStakingCache.lastFetch > 0) {
+  if (!forceRefresh && gmonadsStakingCache.network === network && gmonadsStakingCache.lastFetch > 0) {
     if (now - gmonadsStakingCache.lastFetch < gmonadsStakingCache.cacheDuration) {
       return {
         totalStaked: gmonadsStakingCache.totalStaked,
         activeStaked: gmonadsStakingCache.activeStaked,
+        grossApr: gmonadsStakingCache.apy,
         apy: gmonadsStakingCache.apy,
         fromCache: true,
+        fetchedAt: gmonadsStakingCache.lastFetch,
+        sourceUpdatedAt: gmonadsStakingCache.sourceUpdatedAt ?? null,
       }
     }
   }
 
-  const { data } = await fetchGmonadsValidatorsEpoch(network)
+  // Keep this cache scoped to its network; the legacy shared epoch cache is not.
+  const response = await fetch(`https://www.gmonads.com/api/v1/public/validators/epoch?network=${encodeURIComponent(network)}`, { cache: 'no-store', signal: AbortSignal.timeout(12_000) })
+  if (!response.ok) throw new Error('Could not load network staking data')
+  const { success, data } = await response.json()
+  if (!success) throw new Error('Could not load network staking data')
   const computed = computeStakingStatsFromGmonadsRows(data)
 
   if (computed.totalStaked !== null) {
     gmonadsStakingCache.totalStaked = computed.totalStaked
     gmonadsStakingCache.activeStaked = computed.activeStaked
     gmonadsStakingCache.apy = computed.apy
-    gmonadsStakingCache.lastFetch = now
+    gmonadsStakingCache.lastFetch = Date.now()
+    gmonadsStakingCache.sourceUpdatedAt = computed.sourceUpdatedAt
+    gmonadsStakingCache.network = network
   }
 
-  return { ...computed, fromCache: false }
+  return { ...computed, fromCache: false, fetchedAt: Date.now() }
 }
 
 /**
@@ -146,8 +171,8 @@ export async function fetchTotalStaked(rpcUrl = null) {
  * Calculate APY based on total staked and block rewards
  * APY = (Annual Rewards / Total Staked) * 100
  */
-export function calculateAPY(totalStakedMON) {
-  if (!totalStakedMON || totalStakedMON <= 0) {
+export function calculateAPR(totalStakedMON) {
+  if (!Number.isFinite(totalStakedMON) || totalStakedMON <= 0) {
     return null
   }
 
@@ -161,6 +186,9 @@ export function calculateAPY(totalStakedMON) {
 
   return apy
 }
+
+/** @deprecated This function computes APR. Use calculateAPR and label it APR. */
+export const calculateAPY = calculateAPR
 
 /**
  * Get current epoch from staking precompile
@@ -222,8 +250,9 @@ export async function getStakingStats(forceRefresh = false) {
   }
 
   // Fetch fresh data
-  const totalStaked = await fetchTotalStaked()
-  const apy = calculateAPY(totalStaked)
+  // A precompile account balance includes pending withdrawals and rewards;
+  // it is not the amount participating in consensus.
+  const { totalStaked, grossApr: apy } = await getNetworkStakingStats(forceRefresh)
 
   // Update cache
   if (totalStaked !== null) {

@@ -209,18 +209,10 @@ a:focus-visible,
   }
 }
 
-/* Prevent text selection on mobile */
+/* Keep values and addresses selectable on touch devices. */
 @media (hover: none) and (pointer: coarse) {
-  *:not(input):not(textarea):not([contenteditable="true"]) {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
   button,
   a {
     touch-action: manipulation;
   }
-} 
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useMonad } from '../contexts/MonadContext'
 import { getNetworkStakingStats, formatStakedMON, formatAPY } from '../utils/stakingApi'
 import { fetchMonPrice, formatPrice, formatChange } from '../utils/priceApi'
@@ -43,6 +43,17 @@ function StatItem({ label, children, className = '' }) {
 
 const Footer = () => {
   const { latestBlock, stats } = useMonad()
+  const footerRef = useRef(null)
+  useEffect(() => {
+    const footer = footerRef.current
+    const app = footer?.closest('.app')
+    if (!footer || !app) return undefined
+    const measure = () => app.style.setProperty('--network-footer-height', `${Math.ceil(footer.getBoundingClientRect().height)}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(footer)
+    return () => { observer.disconnect(); app.style.removeProperty('--network-footer-height') }
+  }, [])
 
   const [staking, setStaking] = useState({ totalStaked: null, apy: null, loading: true })
   const [price, setPrice] = useState({ price: null, change24h: null, loading: true })
@@ -141,7 +152,7 @@ const Footer = () => {
       : null) ?? blockTimeMs
 
   return (
-    <footer className="app-footer app-footer-stats" aria-label="Network statistics">
+    <footer ref={footerRef} className="app-footer app-footer-stats" aria-label="Network statistics">
       <div className="footer-stats-glow" aria-hidden="true" />
       <div className="footer-stats-inner">
         <div className="footer-stats-track">

@@ -1,21 +1,17 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, Suspense, lazy } from 'react'
+import { MotionConfig } from 'framer-motion'
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import Header from './components/Header'
 import ErrorBoundary from './components/ErrorBoundary'
 import { MonadProvider } from './contexts/MonadContext'
+import { legacyCalculatorTarget, legacyHomeTarget } from './pages/home/homeNavigation'
 import './App.css'
 
-// Lazy-split heavy non-critical components to trim initial JS payload.
-// These are below-the-fold (Footer), background (PurpleRainCanvas), or
-// home-only (Stats, LiveFeed) — safe to code-split.
-const PurpleRainCanvas = lazy(() => import('./components/PurpleRainCanvas'))
-const LiveFeed = lazy(() => import('./components/LiveFeed'))
+// Keep routes and the shared network ticker in separate loading boundaries.
 const Footer = lazy(() => import('./components/Footer'))
 
-const PricePage = lazy(() => import('./pages/PricePage'))
+const HomePage = lazy(() => import('./pages/HomePage'))
 const StakingPage = lazy(() => import('./pages/StakingPage'))
-const StakingCalculatorPage = lazy(() => import('./pages/StakingCalculatorPage'))
 const ValidatorRequirementsPage = lazy(() => import('./pages/ValidatorRequirementsPage'))
 const BlockchainVizPage = lazy(() => import('./pages/BlockchainVizPage'))
 const EcosystemVizPage = lazy(() => import('./pages/EcosystemVizPage'))
@@ -24,7 +20,6 @@ const MonadWorld3DPage = lazy(() => import('./pages/MonadWorld3DPage'))
 const AgoraWorldPage = lazy(() => import('./pages/AgoraWorldPage'))
 const AgoraWorld3DPage = lazy(() => import('./pages/AgoraWorld3DPage'))
 const ShipPage = lazy(() => import('./pages/ShipPage'))
-const OdysseyVsPage = lazy(() => import('./pages/OdysseyVsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const WalletProviders = lazy(() => import('./wallet/WalletProviders'))
 
@@ -40,21 +35,16 @@ function StakingRoute() {
 
 function PageFallback() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-      <motion.img
-        src="/monad_logo.png"
-        alt="Loading"
-        style={{ width: 48, height: 48, opacity: 0.6 }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-      />
+    <div className="page-fallback" role="status" aria-live="polite">
+      <img src="/monad_logo.png" alt="" className="page-fallback-logo" />
+      <span>Loading view…</span>
     </div>
   )
 }
 
 function AppContent() {
   const location = useLocation()
-  const isOverlayPage = ['/price', '/staking', '/staking-calculator', '/validator-requirements', '/network', '/ecosystem', '/world', '/world-3d', '/agora-world', '/agora-world-3d', '/odyssey', '/odysseyVS'].includes(location.pathname)
+  const isOverlayPage = ['/price', '/terminal', '/staking', '/staking-calculator', '/validator-requirements', '/network', '/ecosystem', '/world', '/world-3d', '/agora-world', '/agora-world-3d', '/odyssey'].includes(location.pathname)
   const showNetworkFooter =
     !isOverlayPage ||
     location.pathname === '/world' ||
@@ -64,25 +54,14 @@ function AppContent() {
     <div className="app">
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <Header />
-      <main id="main-content" className="main-content">
-        {location.pathname !== '/network' && location.pathname !== '/ecosystem' && location.pathname !== '/world' && location.pathname !== '/world-3d' && location.pathname !== '/agora-world' && location.pathname !== '/agora-world-3d' && location.pathname !== '/odyssey' && location.pathname !== '/odysseyVS' && (
-          <Suspense fallback={null}>
-            <PurpleRainCanvas />
-          </Suspense>
-        )}
+      <main id="main-content" className="main-content" tabIndex={-1}>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-            <Route
-              path="/"
-              element={
-                <Suspense fallback={null}>
-                  <LiveFeed />
-                </Suspense>
-              }
-            />
-            <Route path="/price" element={<PricePage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/price" element={<Navigate to={legacyHomeTarget(location, 'price')} replace />} />
+            <Route path="/terminal" element={<Navigate to={legacyHomeTarget(location, 'terminal')} replace />} />
             <Route path="/staking" element={<StakingRoute />} />
-            <Route path="/staking-calculator" element={<StakingCalculatorPage />} />
+            <Route path="/staking-calculator" element={<Navigate to={legacyCalculatorTarget(location)} replace />} />
             <Route path="/validator-requirements" element={<ValidatorRequirementsPage />} />
             <Route path="/network" element={<BlockchainVizPage />} />
             <Route path="/ecosystem" element={<EcosystemVizPage />} />
@@ -91,8 +70,6 @@ function AppContent() {
             <Route path="/agora-world" element={<AgoraWorldPage />} />
             <Route path="/agora-world-3d" element={<AgoraWorld3DPage />} />
             <Route path="/odyssey" element={<ShipPage />} />
-            <Route path="/odysseyVS" element={<OdysseyVsPage />} />
-            <Route path="/odyssey-vs" element={<Navigate to="/odysseyVS" replace />} />
             <Route path="/ship" element={<Navigate to="/odyssey" replace />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
@@ -108,13 +85,6 @@ function AppContent() {
 }
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const minTime = setTimeout(() => setIsLoading(false), 800)
-    return () => clearTimeout(minTime)
-  }, [])
-
   // Production: discourage opening devtools (full block not possible)
   useEffect(() => {
     if (!import.meta.env.PROD) return
@@ -134,45 +104,15 @@ function App() {
     }
   }, [])
 
-  if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <motion.div
-          className="loading-content"
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4 }}
-        >
-          <motion.div
-            className="purple-rain-logo"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          >
-            <img 
-              src="/monad_logo.png" 
-              alt="Monad Logo" 
-              className="loading-logo-image"
-            />
-          </motion.div>
-          <p className="loading-title">Purple Rain</p>
-          <motion.div
-            className="loading-bar"
-            initial={{ width: 0 }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 0.7, ease: "easeInOut" }}
-          />
-        </motion.div>
-      </div>
-    )
-  }
-
   return (
     <ErrorBoundary>
-      <MonadProvider>
-        <AppContent />
-      </MonadProvider>
+      <MotionConfig reducedMotion="user">
+        <MonadProvider>
+          <AppContent />
+        </MonadProvider>
+      </MotionConfig>
     </ErrorBoundary>
   )
 }
 
-export default App 
+export default App

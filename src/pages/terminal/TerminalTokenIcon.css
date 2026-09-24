@@ -1,0 +1,3 @@
+.term-token-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 16px; overflow: hidden; border-radius: 50%; background: var(--term-surface-icon, #21172e); color: var(--term-text-soft, #cbc3d8); vertical-align: middle; }
+.term-token-icon img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.term-token-icon > span { font-size: 9px; line-height: 1; font-weight: 500; }

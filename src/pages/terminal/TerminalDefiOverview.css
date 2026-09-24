@@ -1,0 +1,41 @@
+.term-defi { min-height: 0; flex: 1; overflow: auto; color: var(--term-text, #e5e7eb); background: var(--term-bg, #04030a); font: 10px/1.5 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace; font-variant-numeric: tabular-nums; scrollbar-width: thin; scrollbar-color: var(--term-scrollbar, rgba(139, 92, 246, 0.35)) transparent; }
+.term-defi * { box-sizing: border-box; }
+.term-defi a { color: var(--term-accent, #c4b5fd); text-decoration: none; }
+.term-defi a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.term-defi button:focus-visible, .term-defi a:focus-visible { outline: 1px solid var(--term-accent, #c4b5fd); outline-offset: 2px; }
+.term-defi-heading { display: flex; align-items: center; gap: 8px; min-height: 29px; padding: 3px 8px; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); background: var(--term-panel, #0d0918); }
+.term-defi-heading h3 { margin: 0; font-size: 10px; font-weight: 500; letter-spacing: .04em; }
+.term-defi-heading > span { margin-left: auto; color: var(--term-muted, #a59ab6); font-size: 9px; }
+.term-defi-heading button { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; color: var(--term-accent, #c4b5fd); background: transparent; border: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); cursor: pointer; }
+.term-defi-heading button:disabled { opacity: .4; cursor: default; }
+.term-defi-metrics { margin: 0; padding: 0 8px; }
+.term-defi-metric { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 34px; padding: 7px 0; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-defi-metric dt { align-self: start; color: var(--term-muted, #a59ab6); }
+.term-defi-metric dd { min-width: 0; margin: 0; text-align: right; font-size: 12px; overflow-wrap: anywhere; }
+.term-defi-changes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 2px 8px; margin-top: 2px; font-size: 9px; }
+.term-defi-changes i { color: var(--term-muted, #a59ab6); font-style: normal; }
+.term-defi .term-defi-up { color: #61d7ad; }
+.term-defi .term-defi-down { color: #ef8294; }
+.term-defi-subheading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 29px; padding: 9px 8px 4px; }
+.term-defi-subheading h4 { margin: 0; font-size: 9px; font-weight: 500; letter-spacing: .03em; }
+.term-defi-subheading > span, .term-defi-subheading > a { font-size: 9px; }
+.term-defi-subheading > span { color: var(--term-muted, #a59ab6); }
+.term-defi-protocols { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.term-defi-protocols th, .term-defi-protocols td { padding: 6px 8px; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); text-align: right; font-size: 10px; font-weight: 400; }
+.term-defi-protocols thead th { color: var(--term-muted, #a59ab6); font-size: 9px; }
+.term-defi-protocols th:first-child { width: 48%; text-align: left; }
+.term-defi-protocols th:nth-child(2) { width: 30%; }
+.term-defi-protocols th:nth-child(3) { width: 22%; }
+.term-defi-protocols tbody a { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--term-text, #e5e7eb); }
+.term-defi-protocols img { flex: none; object-fit: contain; }
+.term-defi-protocols tbody a > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-defi-empty { margin: 0; padding: 12px 8px; color: var(--term-muted, #a59ab6); }
+.term-defi-sources { padding: 0 8px; }
+.term-defi-source { padding: 6px 0; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); font-size: 9px; }
+.term-defi-source > div { display: flex; justify-content: space-between; gap: 8px; }
+.term-defi-source a { display: inline-flex; align-items: center; gap: 5px; }
+.term-defi-source > div > span { flex: none; color: var(--term-muted, #a59ab6); }
+.term-defi-source time { display: block; margin-top: 2px; color: var(--term-muted, #a59ab6); }
+.term-defi-source p { margin: 4px 0 0; color: #ef8294; overflow-wrap: anywhere; }
+.term-defi-note { margin: 0; padding: 9px 8px 12px; color: var(--term-muted, #a59ab6); font-size: 9px; line-height: 1.6; }
+@media (pointer: coarse) { .term-defi-heading { min-height: 38px; } .term-defi-heading button { width: 34px; height: 32px; } .term-defi-protocols tbody a { min-height: 28px; } }

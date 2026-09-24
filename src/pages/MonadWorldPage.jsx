@@ -6,6 +6,9 @@ import { fetchValidatorPerformance } from '../utils/validatorPerformanceApi'
 import { updateNowProposer, pushProposerTick } from '../utils/proposerTicker'
 import { logger } from '../utils/logger'
 import { formatStakeMon, formatCommission, normalizeHexId } from '../utils/worldShared'
+import { createWorldArcClock, getWorldArcTiming, selectWorldBlock, WORLD_BLOCK_CADENCE_MS, WORLD_ARC_DASH_LENGTH, WORLD_ARC_MAX_DELAY } from '../utils/worldArcTiming'
+import { createWorldArcDiagnostics } from '../utils/worldArcDiagnostics'
+import { createWorldArcPlayback } from '../utils/worldArcPlayback'
 import './MonadWorldPage.css'
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -22,18 +25,10 @@ const STYLE_OVERRIDES = [
 // Match MonadWorld3D: short dashed “comets” travel along each arc and exit —
 // not a full growing network that holds on screen (that was the hitch + the
 // visual mismatch with /world-3d).
-const BLOCK_CADENCE_MS = 280
-const ARC_MIN_CADENCE_MS = 160
-const ARC_MAX_CADENCE_MS = 320
-const DASH_LEN = 0.24
-const MAX_ARC_DELAY = 0.12
+const DASH_LEN = WORLD_ARC_DASH_LENGTH
+const MAX_ARC_DELAY = WORLD_ARC_MAX_DELAY
 const ARC_SEGMENTS = 8
 const ARC_DPR_IDLE = 1
-
-function travelMsForCadence(cadence) {
-  // Finish inside the live block window (~0.3s) with a small gap before the next burst.
-  return Math.max(110, Math.min(Math.round(cadence * 0.7), 210))
-}
 
 function pointOnQuad(p0x, p0y, cx, cy, p2x, p2y, t) {
   const u = 1 - t
@@ -102,8 +97,6 @@ export default function MonadWorldPage() {
   const mapDrivingRef = useRef(false)
   const lastMapDrawRef = useRef(0)
   const sizeRef = useRef({ w: 0, h: 0 })
-  const lastBlockAtRef = useRef(0)
-  const lastBlockNumRef = useRef(null)
   const blockValRef = useRef(null)
   const nowRootRef = useRef(null)
   const nowImgRef = useRef(null)
@@ -112,10 +105,13 @@ export default function MonadWorldPage() {
   const tickerElRef = useRef(null)
   const lastTickerAtRef = useRef(0)
   const loopAliveRef = useRef(false)
-  const liveCadenceRef = useRef(BLOCK_CADENCE_MS)
+  const arcClockRef = useRef(createWorldArcClock())
+  const playbackRef = useRef(createWorldArcPlayback())
+  const diagnosticsRef = useRef(null)
 
   const navigate = useNavigate()
-  const { latestBlock, isConnected, connectionStatus } = useMonad()
+  const { latestHead, latestBlock, isConnected, connectionStatus } = useMonad()
+  const liveBlock = selectWorldBlock(latestHead, latestBlock)
   const [blockNum, setBlockNum] = useState(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState(null)
@@ -151,7 +147,10 @@ export default function MonadWorldPage() {
   useEffect(() => {
     if (!containerRef.current) return
     aliveRef.current = true
+    let disposed = false
     let map = null
+    let loadTimer = 0
+    let cullRaf = 0
 
     const boot = async () => {
       try {
@@ -163,7 +162,7 @@ export default function MonadWorldPage() {
 
         const ml = mod.default || mod
         mlRef.current = ml
-        if (!aliveRef.current || !containerRef.current) return
+        if (disposed || !containerRef.current) return
 
         map = new ml.Map({
           container: containerRef.current,
@@ -192,10 +191,13 @@ export default function MonadWorldPage() {
         map.on('error', (e) => logger.debug('Map error:', e.error?.message || e))
 
         await new Promise((res, rej) => {
-          map.once('load', res)
-          setTimeout(() => rej(new Error('Map timed out')), 20000)
+          map.once('load', () => {
+            clearTimeout(loadTimer)
+            res()
+          })
+          loadTimer = setTimeout(() => rej(new Error('Map timed out')), 20000)
         })
-        if (!aliveRef.current) return
+        if (disposed) return
 
         STYLE_OVERRIDES.forEach(([layer, prop, val]) => {
           try { map.setPaintProperty(layer, prop, val) } catch { /* basemap style may not define this layer/property */ }
@@ -242,6 +244,7 @@ export default function MonadWorldPage() {
         canvas.className = 'mw-arc-canvas'
         containerRef.current.appendChild(canvas)
         overlayRef.current = canvas
+        if (import.meta.env.DEV) diagnosticsRef.current = createWorldArcDiagnostics(canvas)
         ctxRef.current = canvas.getContext('2d', { alpha: true, desynchronized: true })
 
         projDirtyRef.current = true
@@ -506,7 +509,6 @@ export default function MonadWorldPage() {
         // Cull is cheap CSS toggling and doesn't need per-frame precision —
         // batch it to one rAF per drag gesture via its own local id (kept
         // separate from rafRef, which belongs to the arc animation loop).
-        let cullRaf = 0
         const scheduleCull = () => {
           if (cullRaf) return
           cullRaf = requestAnimationFrame(() => { cullRaf = 0; cullMarkers() })
@@ -612,6 +614,7 @@ export default function MonadWorldPage() {
         cullFnRef.current()
         setReady(true)
       } catch (err) {
+        if (disposed) return
         console.error('[MonadWorld] Init failed:', err)
         setError(err.message || 'Failed to load map')
       }
@@ -620,8 +623,11 @@ export default function MonadWorldPage() {
     boot()
 
     return () => {
+      disposed = true
       aliveRef.current = false
+      clearTimeout(loadTimer)
       clearTimeout(sizeTimerRef.current)
+      cancelAnimationFrame(cullRaf)
       cancelAnimationFrame(rafRef.current)
       if (overlayRef.current) { overlayRef.current.remove(); overlayRef.current = null }
       markersRef.current.forEach((m) => m.remove())
@@ -634,7 +640,7 @@ export default function MonadWorldPage() {
   const triggerArcBurst = useCallback((payload) => {
     if (!aliveRef.current) return
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    const { entry, proposerId } = payload
+    const { entry, proposerId, timing } = payload
     const nodes = allNodesRef.current
     const tLon = entry.coords[0], tLat = entry.coords[1]
 
@@ -647,49 +653,26 @@ export default function MonadWorldPage() {
       delays[i] = Math.min(1, dist / 140) * MAX_ARC_DELAY
     }
 
-    const travel = travelMsForCadence(liveCadenceRef.current)
-    // Keep burst lifetime ≤ live cadence so 0.3s blocks never stack overlapping draws.
-    const total = Math.min(
-      liveCadenceRef.current - 8,
-      travel * (1 + MAX_ARC_DELAY + DASH_LEN),
-    )
-
     projDirtyRef.current = true
+    diagnosticsRef.current?.burst(performance.now(), animRef.current, timing)
     animRef.current = {
       proposerCoords: entry.coords,
       proposerId,
       startTime: performance.now(),
-      travel,
-      total: Math.max(travel, total),
+      travel: timing.travel,
+      total: timing.total,
       _delays: delays,
+    }
+    if (import.meta.env.DEV && overlayRef.current) {
+      overlayRef.current.dataset.block = String(timing.number)
+      overlayRef.current.dataset.burstDurationMs = timing.total.toFixed(1)
+      overlayRef.current.dataset.receiptToStartMs = String(Math.max(0, Date.now() - timing.receivedAt))
     }
   }, [])
 
-  // Continuous rAF — arcs keep moving even while the user pans/zooms.
-  useEffect(() => {
-    if (!ready) return
-    loopAliveRef.current = true
-    const loop = () => {
-      if (!loopAliveRef.current) return
-      drawFnRef.current()
-      rafRef.current = requestAnimationFrame(loop)
-    }
-    rafRef.current = requestAnimationFrame(loop)
-    return () => {
-      loopAliveRef.current = false
-      cancelAnimationFrame(rafRef.current)
-    }
-  }, [ready])
-
-  useEffect(() => {
-    if (!latestBlock || !mapRef.current || !ready) return
-    const v = latestBlock.proposerValidator
-    if (!v?.id) return
-
-    const num = typeof latestBlock.number === 'string'
-      ? parseInt(latestBlock.number, 16) : latestBlock.number
-
-    const entry = mapObjRef.current.get(v.id)
+  const displayBlock = useCallback(({ entry, v, timing }) => {
+    const nowTs = performance.now()
+    const num = timing.number
 
     if (prevProposerRef.current) prevProposerRef.current.classList.remove('vm-on')
     if (entry) { entry.el.classList.add('vm-on'); prevProposerRef.current = entry.el }
@@ -697,20 +680,9 @@ export default function MonadWorldPage() {
     // Reveal block chrome once (number itself is DOM-driven every block).
     setBlockNum((prev) => (prev == null ? num : prev))
 
-    const nowTs = performance.now()
-    if (lastBlockNumRef.current != null && num > lastBlockNumRef.current && lastBlockAtRef.current) {
-      const perBlock = (nowTs - lastBlockAtRef.current) / (num - lastBlockNumRef.current)
-      if (perBlock > 60 && perBlock < 5000) {
-        const ema = liveCadenceRef.current * 0.55 + perBlock * 0.45
-        liveCadenceRef.current = Math.max(ARC_MIN_CADENCE_MS, Math.min(ARC_MAX_CADENCE_MS, ema))
-      }
-    }
-    lastBlockAtRef.current = nowTs
-    lastBlockNumRef.current = num
-
-    // Fire immediately on each block (replace in-flight) so arcs lock to ~0.3s.
+    // The marker, producer card, and arc all describe the same displayed block.
     if (entry) {
-      triggerArcBurst({ entry, proposerId: v.id })
+      triggerArcBurst({ entry, proposerId: v.id, timing })
     }
 
     const name = entry?.name || v.name || `Validator #${v.id}`
@@ -742,7 +714,59 @@ export default function MonadWorldPage() {
         showBlock: false,
       })
     }
-  }, [latestBlock, ready, triggerArcBurst])
+  }, [triggerArcBurst])
+
+  // Consume verified blocks on the animation clock, not on jittery RPC arrival.
+  // Starting and drawing in the same frame also preserves the first dash phase.
+  useEffect(() => {
+    if (!ready) return
+    const playback = playbackRef.current
+    loopAliveRef.current = true
+    const loop = (at) => {
+      if (!loopAliveRef.current) return
+      const started = performance.now()
+      const next = document.visibilityState === 'visible' ? playback.take(started) : null
+      if (next) displayBlock(next)
+      const anim = animRef.current
+      drawFnRef.current()
+      diagnosticsRef.current?.frame(at, performance.now() - started, anim)
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return
+      playback.clear()
+      diagnosticsRef.current?.resetFrame()
+      animRef.current = null
+      canvasDirtyRef.current = true
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    rafRef.current = requestAnimationFrame(loop)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      playback.clear()
+      loopAliveRef.current = false
+      cancelAnimationFrame(rafRef.current)
+    }
+  }, [ready, displayBlock])
+
+  useEffect(() => {
+    if (!liveBlock || !mapRef.current || !ready || document.visibilityState === 'hidden') return
+    if (import.meta.env.DEV && overlayRef.current) {
+      overlayRef.current.dataset.sources = JSON.stringify({
+        head: [latestHead?.number, latestHead?.proposerValidator?.id],
+        full: [latestBlock?.number, latestBlock?.proposerValidator?.id],
+        selected: [liveBlock.number, liveBlock.proposerValidator?.id],
+      })
+    }
+    const timing = arcClockRef.current(liveBlock, performance.now())
+    if (!timing) return
+    const v = liveBlock.proposerValidator
+    playbackRef.current.submit({
+      entry: mapObjRef.current.get(v.id), v,
+      // Network arrival jitter must not shorten the visible 300ms cycle.
+      timing: { ...timing, ...getWorldArcTiming(WORLD_BLOCK_CADENCE_MS) },
+    }, performance.now())
+  }, [liveBlock, latestHead, latestBlock, ready])
 
   if (error) {
     return (

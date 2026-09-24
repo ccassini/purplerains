@@ -35,8 +35,10 @@ import { logger } from '../utils/logger'
 import './LiveFeed.css'
 
 const MAX_ROWS = 100
-const SWAP_TICK_MS = 50
-const TRANSFER_TICK_MS = 150
+const SWAP_TICK_MS = 32
+const TRANSFER_TICK_MS = 100
+const SWAP_BATCH = 4
+const TRANSFER_BATCH = 2
 
 // ============ TOKEN ICONS ============
 /** Token icon files that actually ship in /public — never guess beyond this map. */
@@ -419,11 +421,15 @@ const LiveFeed = () => {
     const interval = window.setInterval(() => {
       if (isPaused) return // Skip processing when paused
       if (!swapQueueRef.current.length) return
-      // Process 1 swap per tick - sequential but VERY fast
-      const batch = swapQueueRef.current.splice(0, 1)
+      // Drain a small batch per tick — swap rows stay near real-time without
+      // dumping the whole backlog into one React commit.
+      const batch = swapQueueRef.current.splice(0, SWAP_BATCH)
       if (!batch.length) return
       // Render-level dedupe: one tx key is one row, even if re-queued upstream.
-      setSwapRows((prev) => [batch[0], ...prev.filter((r) => r.id !== batch[0].id)].slice(0, MAX_ROWS))
+      setSwapRows((prev) => {
+        const drop = new Set(batch.map((r) => r.id))
+        return [...batch, ...prev.filter((r) => !drop.has(r.id))].slice(0, MAX_ROWS)
+      })
     }, SWAP_TICK_MS)
     return () => window.clearInterval(interval)
   }, [isPaused])
@@ -433,11 +439,13 @@ const LiveFeed = () => {
     const interval = window.setInterval(() => {
       if (isPaused) return // Skip processing when paused
       if (!transferQueueRef.current.length) return
-      // Process 1 transfer per tick (original speed)
-      const batch = transferQueueRef.current.splice(0, 1)
+      const batch = transferQueueRef.current.splice(0, TRANSFER_BATCH)
       if (!batch.length) return
       // Render-level dedupe: one tx hash is one row, even if re-queued upstream.
-      setTransferRows((prev) => [batch[0], ...prev.filter((r) => r.id !== batch[0].id)].slice(0, MAX_ROWS))
+      setTransferRows((prev) => {
+        const drop = new Set(batch.map((r) => r.id))
+        return [...batch, ...prev.filter((r) => !drop.has(r.id))].slice(0, MAX_ROWS)
+      })
     }, TRANSFER_TICK_MS)
     return () => window.clearInterval(interval)
   }, [isPaused])

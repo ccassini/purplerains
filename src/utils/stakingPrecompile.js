@@ -126,7 +126,24 @@ export function decodeGetWithdrawalRequestResult(resultHex) {
     parseAbiParameters('uint256 amount, uint256 v1, uint64 epoch'),
     resultHex,
   )
-  return { amount, v1: maybeSomething, epoch: Number(epoch) }
+  const activationEpoch = Number(epoch)
+  if (!Number.isSafeInteger(activationEpoch)) throw new Error('Withdrawal epoch exceeds supported range')
+  return { amount, v1: maybeSomething, epoch: activationEpoch, withdrawableEpoch: activationEpoch + 1 }
+}
+
+export function encodeGetDelegationsCalldata(delegatorAddress, startValId = 0n) {
+  return withSelector(GETTER.GET_DELEGATIONS, encodeAbiParameters(
+    parseAbiParameters('address delegator, uint64 startValId'), [delegatorAddress, BigInt(startValId)],
+  ))
+}
+
+export function decodeGetDelegationsResult(resultHex) {
+  const [done, nextValId, ids] = decodeAbiParameters(parseAbiParameters('bool, uint64, uint64[]'), resultHex)
+  return { done, nextValId, ids: ids.map((id) => {
+    const value = Number(id)
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error('Invalid validator ID')
+    return value
+  }) }
 }
 
 export function encodeGetValsetCalldata(selector, index) {
@@ -195,4 +212,3 @@ export function decodeGetValidatorResult(resultHex) {
     bls,
   }
 }
-

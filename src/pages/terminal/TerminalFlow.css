@@ -1,0 +1,13 @@
+/* Only the at-most-18 displayed activity rows acquire a compositor hint, and
+   only for the lifetime of an owned Web Animation. No permanent layer budget. */
+.term-table tbody > tr.term-flow-moving {
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-table tbody > tr.term-flow-moving {
+    will-change: auto;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}

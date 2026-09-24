@@ -1,651 +1,102 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { ExternalLink, Search, Wallet } from 'lucide-react'
-import {
-  useAccount,
-  useBalance,
-  useConnect,
-  useDisconnect,
-  useSendTransaction,
-  useSwitchChain,
-  usePublicClient,
-} from 'wagmi'
-import { parseEther } from 'viem'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowUpRight, X } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useAccount, useBalance, useConnect, useDisconnect, usePublicClient, useSendTransaction, useSwitchChain } from 'wagmi'
 import { monad } from '../wallet/wagmiConfig'
-import { getAllValidators, getLocalLogoPath, getValidatorById, loadValidatorMetadata } from '../utils/validatorApi'
-import { computeStakingStatsFromGmonadsRows, formatAPY, formatStakedMON } from '../utils/stakingApi'
-import { fetchGmonadsValidatorsEpoch } from '../utils/gmonadsApi'
-import {
-  STAKING_PRECOMPILE_ADDRESS,
-  decodeGetDelegatorResult,
-  decodeGetWithdrawalRequestResult,
-  encodeClaimRewardsCalldata,
-  encodeCompoundCalldata,
-  encodeDelegateCalldata,
-  encodeGetDelegatorCalldata,
-  encodeGetWithdrawalRequestCalldata,
-  encodeUndelegateCalldata,
-  encodeWithdrawCalldata,
-} from '../utils/stakingPrecompile'
-import { commissionBpsFromWad, formatApyFromBps, formatMonCompactFromWei } from '../utils/formatters'
+import StakingHeader from './staking/StakingHeader'
+import ValidatorList from './staking/ValidatorList'
+import StakePanel from './staking/StakePanel'
+import PortfolioPanel from './staking/PortfolioPanel'
+import StakingCalculator from './StakingCalculatorPage'
+import { useStakingNetwork } from './staking/useStakingNetwork'
+import { useDelegatorPosition } from './staking/useDelegatorPosition'
+import { usePortfolio } from './staking/usePortfolio'
+import { useStakingActions, txUrl } from './staking/useStakingActions'
+import { getLocalLogoPath, getValidatorById } from '../utils/validatorApi'
 import './StakingPage.css'
 
-function shortAddr(addr) {
-  if (!addr) return '—'
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function formatMonFromWei(bi) {
-  try {
-    const x = typeof bi === 'bigint' ? bi : BigInt(bi ?? 0)
-    const whole = x / 10n ** 18n
-    const frac = (x % 10n ** 18n) / 10n ** 14n
-    return `${whole}.${String(frac).padStart(4, '0')}`
-  } catch {
-    return '0.0000'
-  }
-}
-
-async function ethCall(publicClient, data) {
-  const res = await publicClient.call({ to: STAKING_PRECOMPILE_ADDRESS, data })
-  // wagmi/viem returns { data } sometimes, or hex string
-  return typeof res === 'string' ? res : res?.data
+function WalletPicker({ connectors, pending, error, onSelect, onClose }) {
+  const dialog = useRef(null)
+  useEffect(() => { dialog.current?.showModal() }, [])
+  return <dialog ref={dialog} className="sk-wallet-dialog" onCancel={onClose} aria-labelledby="sk-wallet-title"><div className="sk-section-heading"><h2 id="sk-wallet-title">Connect your wallet</h2><button type="button" className="sk-icon-button" onClick={onClose} aria-label="Close wallet picker" autoFocus><X size={18} /></button></div><p>Choose an available browser wallet to continue on Monad.</p><div className="sk-wallet-options">{connectors.map(connector => <button type="button" className="sk-btn" key={connector.uid} disabled={pending} onClick={() => onSelect(connector)}>{connector.name === 'Injected' ? 'Browser wallet' : connector.name}<ArrowUpRight size={16} /></button>)}</div>{!connectors.length && <p>No browser wallet detected. Open this page in a browser with your wallet installed.</p>}{error && <p className="sk-warning" role="alert">{error.shortMessage || error.message}</p>}</dialog>
 }
 
 export default function StakingPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { address, isConnected, chainId } = useAccount()
-  const { connect, connectors, isPending: isConnecting } = useConnect()
+  const { connect, connectors, isPending: isConnecting, error: connectionError, reset: resetConnection } = useConnect()
   const { disconnect } = useDisconnect()
-  const { switchChain, isPending: isSwitching } = useSwitchChain()
+  const { switchChain, isPending: isSwitching, error: switchError } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: monad.id })
   const { sendTransactionAsync, isPending: isSending } = useSendTransaction()
-
-  const [query, setQuery] = useState('')
+  const [walletOpen, setWalletOpen] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
-  const [stakeAmount, setStakeAmount] = useState('100')
-  const [status, setStatus] = useState(null)
-
-  const [epochInfo, setEpochInfo] = useState({ epoch: null, inEpochDelayPeriod: null })
-  const [myDelegator, setMyDelegator] = useState(null)
-  const [myWithdrawal, setMyWithdrawal] = useState(null)
-  const [pendingWithdrawals, setPendingWithdrawals] = useState([])
-  const [undelegateSlot, setUndelegateSlot] = useState(0)
-  const [withdrawSlot, setWithdrawSlot] = useState(0)
-  const [networkStats, setNetworkStats] = useState({ totalStaked: null, apy: null, fromCache: false })
-
-  const [sortKey, setSortKey] = useState('stake')
-  const [chainStatsById, setChainStatsById] = useState(() => ({}))
-  const [stakeLoad, setStakeLoad] = useState({ done: 0, total: 0 })
-  const [dataError, setDataError] = useState(null)
-
+  const [activeTab, setActiveTab] = useState('stake')
+  const [stakeAmount, setStakeAmount] = useState('')
+  const [unstakeAmount, setUnstakeAmount] = useState('')
+  const actionPanel = useRef(null)
   const needsChain = isConnected && chainId !== monad.id
-  const { data: balanceData } = useBalance({
-    address,
-    chainId: monad.id,
-    query: { enabled: Boolean(isConnected && address && !needsChain) },
-  })
-
-  const validators = useMemo(() => {
-    const list = getAllValidators()
-      .filter(v => v?.id && v?.name)
-      .map(v => ({
-        id: v.id,
-        name: v.name,
-        website: v.website || null,
-        logo: getLocalLogoPath(v.id),
-      }))
-    const q = query.trim().toLowerCase()
-    if (!q) return list
-    return list.filter(v => v.name.toLowerCase().includes(q) || String(v.id).includes(q))
-  }, [query])
-
-  const selected = useMemo(() => (selectedId ? getValidatorById(selectedId) : null), [selectedId])
-  const selectedChain = useMemo(() => (selectedId ? chainStatsById[selectedId] : null), [chainStatsById, selectedId])
-
-  const baseApyBps = useMemo(() => {
-    if (typeof networkStats?.apy !== 'number' || Number.isNaN(networkStats.apy)) return 0
-    // percent -> bps
-    return Math.max(0, Math.round(networkStats.apy * 100))
-  }, [networkStats])
-
-  const sortedValidators = useMemo(() => {
-    const list = validators.slice()
-    const cmpStake = (a, b) => {
-      const sa = chainStatsById[a.id]?.totalStakeWei
-      const sb = chainStatsById[b.id]?.totalStakeWei
-      const aMissing = sa === undefined || sa === null
-      const bMissing = sb === undefined || sb === null
-      if (aMissing && bMissing) return 0
-      if (aMissing) return 1
-      if (bMissing) return -1
-      if (sa === sb) return 0
-      return sa > sb ? -1 : 1
-    }
-    const cmpApy = (a, b) => {
-      const ca = commissionBpsFromWad(chainStatsById[a.id]?.commissionWad ?? 0n)
-      const cb = commissionBpsFromWad(chainStatsById[b.id]?.commissionWad ?? 0n)
-      const na = Math.round((baseApyBps * (10_000 - ca)) / 10_000)
-      const nb = Math.round((baseApyBps * (10_000 - cb)) / 10_000)
-      if (na === nb) return 0
-      return na > nb ? -1 : 1
-    }
-    const cmpName = (a, b) => a.name.localeCompare(b.name)
-    if (sortKey === 'apy') list.sort(cmpApy)
-    else if (sortKey === 'name') list.sort(cmpName)
-    else list.sort(cmpStake)
-    return list
-  }, [baseApyBps, chainStatsById, sortKey, validators])
-
-  const refreshWithdrawalSlots = useCallback(async () => {
-    if (!publicClient || !address || !selectedId) return
-    try {
-      const maxScan = 16
-      const slots = Array.from({ length: maxScan }, (_, i) => i)
-      const found = []
-
-      // parallel-ish scanning with small batches to avoid rate limits
-      for (let start = 0; start < slots.length; start += 4) {
-        const batch = slots.slice(start, start + 4)
-        const results = await Promise.all(batch.map(async (i) => {
-          const wrHex = await ethCall(publicClient, encodeGetWithdrawalRequestCalldata(selectedId, address, i))
-          if (!wrHex || wrHex === '0x') return null
-          const decoded = decodeGetWithdrawalRequestResult(wrHex)
-          if (!decoded?.amount || decoded.amount <= 0n) return { id: i, empty: true }
-          return { id: i, ...decoded }
-        }))
-        for (const r of results) {
-          if (!r) continue
-          if (r.empty) continue
-          found.push(r)
-        }
-      }
-
-      const used = new Set(found.map((x) => x.id))
-      const free = slots.find((i) => i !== 0 && !used.has(i)) ?? 1
-
-      setPendingWithdrawals(found)
-      setUndelegateSlot(free || 1)
-      setWithdrawSlot(found.length ? found[0].id : 0)
-    } catch {
-      setPendingWithdrawals([])
-      setUndelegateSlot(1)
-      setWithdrawSlot(0)
-    }
-  }, [address, publicClient, selectedId])
-
-  const refreshMyState = useCallback(async () => {
-    if (!publicClient || !address || !selectedId) return
-    try {
-      const delHex = await ethCall(publicClient, encodeGetDelegatorCalldata(selectedId, address))
-      if (delHex && delHex !== '0x') setMyDelegator(decodeGetDelegatorResult(delHex))
-      else setMyDelegator(null)
-    } catch {
-      setMyDelegator(null)
-    }
-    try {
-      const wId = Number(withdrawSlot)
-      if (!Number.isFinite(wId)) return
-      const wrHex = await ethCall(publicClient, encodeGetWithdrawalRequestCalldata(selectedId, address, wId))
-      if (wrHex && wrHex !== '0x') setMyWithdrawal(decodeGetWithdrawalRequestResult(wrHex))
-      else setMyWithdrawal(null)
-    } catch {
-      setMyWithdrawal(null)
-    }
-  }, [address, publicClient, selectedId, withdrawSlot])
-
+  const onMonad = isConnected && !needsChain
+  const network = useStakingNetwork(publicClient)
+  const { data: balance, refetch: refreshBalance } = useBalance({ address, chainId: monad.id, query: { enabled: Boolean(onMonad && address) } })
+  const positionData = useDelegatorPosition({ publicClient, address, validatorId: selectedId, enabled: onMonad })
+  const portfolio = usePortfolio({ publicClient, address, validators: network.validators, enabled: onMonad })
+  const refreshPosition = positionData.refresh
+  const refreshPortfolio = portfolio.refresh
+  const refreshEpoch = network.refreshEpoch
+  const refreshAll = useCallback(() => { refreshPosition(); refreshPortfolio(); refreshBalance(); refreshEpoch?.() }, [refreshBalance, refreshPortfolio, refreshPosition, refreshEpoch])
+  const canAct = Boolean(onMonad && !isConnecting && !isSending && !isSwitching && selectedId != null)
+  const actions = useStakingActions({ sendTransactionAsync, publicClient, address, chainId, balanceWei: balance?.value, position: positionData.position, withdrawals: positionData.withdrawals, epochInfo: network.epochInfo, withdrawalsReady: positionData.withdrawalsReady, validatorId: selectedId, canAct, onSettled: refreshAll })
+  const isPending = Boolean(isSending || actions.isPending)
+  const selected = useMemo(() => {
+    const known = network.validators.find(v => v.id === selectedId)
+    if (known) return known
+    if (!portfolio.rows.some(row => row.validatorId === selectedId)) return null
+    return { id: selectedId, name: getValidatorById(selectedId)?.name || `Validator #${selectedId}`, logo: getLocalLogoPath(selectedId), hasChainData: false, isActive: false, totalStakeWei: null, commissionBps: null }
+  }, [network.validators, portfolio.rows, selectedId])
+  const openWallet = () => { resetConnection(); setWalletOpen(true) }
+  const selectValidator = (id, scrollToAction = false) => {
+    if (isPending) return
+    setSelectedId(id); setActiveTab('stake'); setStakeAmount(''); setUnstakeAmount(''); actions.clearStatus()
+    if (scrollToAction || window.matchMedia('(max-width: 1050px)').matches) actionPanel.current?.scrollIntoView({ behavior: 'instant', block: 'start' })
+  }
+  useEffect(() => { if (isConnected) setWalletOpen(false) }, [isConnected])
+  useEffect(() => { setStakeAmount(''); setUnstakeAmount('') }, [address, chainId])
   useEffect(() => {
-    loadValidatorMetadata()
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      try {
-        const { data, meta } = await fetchGmonadsValidatorsEpoch('mainnet')
-        if (cancelled) return
-
-        let sumMon = 0n
-        const next = {}
-        const idSet = new Set()
-
-        for (const row of data) {
-          const id = Number(row?.val_index)
-          if (!Number.isFinite(id)) continue
-          idSet.add(id)
-          try {
-            const stakeMon = BigInt(row?.stake ?? '0')
-            sumMon += stakeMon
-            const totalStakeWei = stakeMon * 10n ** 18n
-
-            // commission appears as bps (e.g. 500 = 5.00%)
-            const commissionBps = BigInt(Number(row?.commission ?? 0))
-            const commissionWad = commissionBps * 10n ** 14n
-
-            next[id] = {
-              totalStakeWei,
-              commissionWad,
-              setType: String(row?.validator_set_type || ''),
-              flags: String(row?.flags || ''),
-              authAddress: row?.auth_address || null,
-            }
-          } catch {
-            // ignore row
-          }
-        }
-
-        setChainStatsById((prev) => ({ ...prev, ...next }))
-        setStakeLoad({ done: idSet.size, total: Array.isArray(data) ? data.length : 0 })
-
-        const computed = computeStakingStatsFromGmonadsRows(data)
-        setNetworkStats({ totalStaked: computed.totalStaked, apy: computed.apy, fromCache: false })
-
-        const epoch = Number(data?.[0]?.epoch ?? NaN)
-        if (Number.isFinite(epoch)) setEpochInfo({ epoch, inEpochDelayPeriod: null })
-        setDataError(null)
-      } catch (err) {
-        if (!cancelled) setDataError('Failed to load validator data. Please try again later.')
-      }
-    }
-
-    run()
-    const id = window.setInterval(run, 60 * 60 * 1000)
-    return () => { cancelled = true; window.clearInterval(id) }
-  }, [])
-
-  useEffect(() => {
-    refreshMyState()
-  }, [refreshMyState])
-
-  useEffect(() => {
-    refreshWithdrawalSlots()
-  }, [refreshWithdrawalSlots])
-
-  const onConnect = () => {
-    // prefer injected (MetaMask/Rabby/etc)
-    const injectedConnector = connectors?.[0]
-    if (injectedConnector) connect({ connector: injectedConnector })
-  }
-
-  const onStake = async () => {
-    if (!isConnected || needsChain || !selectedId) return
-    setStatus(null)
-    try {
-      const value = parseEther(String(stakeAmount || '0'))
-      const data = encodeDelegateCalldata(selectedId)
-      setStatus('Sending delegation…')
-      const hash = await sendTransactionAsync({ to: STAKING_PRECOMPILE_ADDRESS, data, value })
-      setStatus(`Delegation sent: ${hash}`)
-      setTimeout(refreshMyState, 2500)
-    } catch (e) {
-      setStatus(e?.shortMessage || e?.message || 'Failed to delegate')
+    const id = location.hash.slice(1)
+    if (!['validators', 'calculator', 'portfolio'].includes(id)) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const section = document.getElementById(id)
+      section?.scrollIntoView({ behavior: 'instant', block: 'start' })
+      section?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.hash, location.key, network.loading])
+  const scrollToSection = (id) => (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+    event.preventDefault()
+    const hash = `#${id}`
+    if (location.hash !== hash) navigate({ pathname: location.pathname, search: location.search, hash })
+    else {
+      const section = document.getElementById(id)
+      section?.scrollIntoView({ behavior: 'instant', block: 'start' })
+      section?.focus({ preventScroll: true })
     }
   }
 
-  const onUndelegate = async () => {
-    if (!isConnected || needsChain || !selectedId) return
-    setStatus(null)
-    try {
-      const amtWei = parseEther(String(stakeAmount || '0'))
-      const wId = Number(undelegateSlot || 0)
-      const data = encodeUndelegateCalldata(selectedId, amtWei, wId)
-      setStatus('Sending undelegation…')
-      const hash = await sendTransactionAsync({ to: STAKING_PRECOMPILE_ADDRESS, data, value: 0n })
-      setStatus(`Undelegation sent: ${hash}`)
-      setTimeout(() => { refreshWithdrawalSlots(); refreshMyState() }, 2500)
-    } catch (e) {
-      setStatus(e?.shortMessage || e?.message || 'Failed to undelegate')
-    }
-  }
-
-  const onWithdraw = async () => {
-    if (!isConnected || needsChain || !selectedId) return
-    setStatus(null)
-    try {
-      const wId = Number(withdrawSlot || 0)
-      const data = encodeWithdrawCalldata(selectedId, wId)
-      setStatus('Sending withdraw…')
-      const hash = await sendTransactionAsync({ to: STAKING_PRECOMPILE_ADDRESS, data, value: 0n })
-      setStatus(`Withdraw sent: ${hash}`)
-      setTimeout(() => { refreshWithdrawalSlots(); refreshMyState() }, 2500)
-    } catch (e) {
-      setStatus(e?.shortMessage || e?.message || 'Failed to withdraw')
-    }
-  }
-
-  const onClaim = async () => {
-    if (!isConnected || needsChain || !selectedId) return
-    setStatus(null)
-    try {
-      const data = encodeClaimRewardsCalldata(selectedId)
-      setStatus('Claiming rewards…')
-      const hash = await sendTransactionAsync({ to: STAKING_PRECOMPILE_ADDRESS, data, value: 0n })
-      setStatus(`Claim sent: ${hash}`)
-      setTimeout(refreshMyState, 2500)
-    } catch (e) {
-      setStatus(e?.shortMessage || e?.message || 'Failed to claim')
-    }
-  }
-
-  const onCompound = async () => {
-    if (!isConnected || needsChain || !selectedId) return
-    setStatus(null)
-    try {
-      const data = encodeCompoundCalldata(selectedId)
-      setStatus('Compounding rewards…')
-      const hash = await sendTransactionAsync({ to: STAKING_PRECOMPILE_ADDRESS, data, value: 0n })
-      setStatus(`Compound sent: ${hash}`)
-      setTimeout(refreshMyState, 2500)
-    } catch (e) {
-      setStatus(e?.shortMessage || e?.message || 'Failed to compound')
-    }
-  }
-
-  const isBusy = isConnecting || isSending || isSwitching
-
-  const withdrawReady = useMemo(() => {
-    if (!epochInfo?.epoch || !myWithdrawal?.epoch) return null
-    // docs: WITHDRAWAL_DELAY = 1 epoch
-    const needed = Number(myWithdrawal.epoch) + 1
-    return { needed, ok: epochInfo.epoch >= needed }
-  }, [epochInfo, myWithdrawal])
-
-  return (
-    <motion.div
-      className="staking-page"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-    >
-      <div className="staking-panel">
-        <div className="staking-header">
-          <div className="staking-title">
-            <span className="staking-badge">Staking</span>
-            <span className="staking-sub">Delegate MON to Monad validators</span>
-          </div>
-          <div className="staking-actions">
-            <Link className="staking-link" to="/staking-calculator">Calculator</Link>
-            <Link className="staking-link" to="/price">Price</Link>
-            <Link className="staking-link" to="/">Home</Link>
-          </div>
-        </div>
-
-        {dataError && (
-          <div className="staking-error-banner" role="alert">
-            <span>{dataError}</span>
-            <button type="button" onClick={() => setDataError(null)} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
-          </div>
-        )}
-
-        <div className="staking-top">
-          <div className="staking-card">
-            <div className="staking-card-title">Wallet</div>
-            {!isConnected ? (
-              <button className="staking-btn" type="button" onClick={onConnect} disabled={isBusy}>
-                <Wallet size={16} />
-                <span>Connect Wallet</span>
-              </button>
-            ) : (
-              <div className="staking-wallet">
-                <div className="staking-wallet-row">
-                  <span className="muted">Address</span>
-                  <span className="mono">{shortAddr(address)}</span>
-                </div>
-                <div className="staking-wallet-row">
-                  <span className="muted">Network</span>
-                  <span className="mono">{needsChain ? 'Wrong network' : 'Monad (143)'}</span>
-                </div>
-              <div className="staking-wallet-row">
-                <span className="muted">Balance</span>
-                <span className="mono">{balanceData ? `${balanceData.formatted.slice(0, 10)} ${balanceData.symbol}` : '—'}</span>
-              </div>
-                <div className="staking-wallet-actions">
-                  {needsChain && (
-                    <button
-                      className="staking-btn secondary"
-                      type="button"
-                      onClick={() => switchChain({ chainId: monad.id })}
-                      disabled={isBusy}
-                    >
-                      Switch to Monad
-                    </button>
-                  )}
-                  <button className="staking-btn danger" type="button" onClick={() => disconnect()} disabled={isBusy}>
-                    Disconnect
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="staking-card">
-            <div className="staking-card-title">Network</div>
-            <div className="staking-metrics">
-              <div className="metric">
-                <div className="metric-label">Total staked</div>
-                <div className="metric-value mono">{formatStakedMON(networkStats.totalStaked)}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Base APY</div>
-                <div className="metric-value mono">{formatAPY(networkStats.apy)}</div>
-              </div>
-              <a
-                className="metric-link"
-                href="https://monadvision.com/address/0x0000000000000000000000000000000000001000"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink size={14} />
-                Precompile stats
-              </a>
-            </div>
-          </div>
-
-          <div className="staking-card">
-            <div className="staking-card-title">Epoch</div>
-            <div className="staking-metrics">
-              <div className="metric">
-                <div className="metric-label">Current</div>
-                <div className="metric-value mono">{epochInfo.epoch === null ? '—' : epochInfo.epoch}</div>
-              </div>
-              <div className="metric">
-                <div className="metric-label">Boundary passed?</div>
-                <div className="metric-value mono">
-                  {epochInfo.inEpochDelayPeriod === null ? '—' : (epochInfo.inEpochDelayPeriod ? 'Yes' : 'No')}
-                </div>
-              </div>
-              <a
-                className="metric-link"
-                href="https://docs.monad.xyz/developer-essentials/staking/staking-behavior"
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink size={14} />
-                Staking rules
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="staking-body">
-          <div className="staking-main-content">
-            <div className="validators">
-            <div className="validators-head">
-              <div className="validators-title">Validators</div>
-              <div className="validators-search">
-                <Search size={14} />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name or id…"
-                  inputMode="search"
-                />
-              </div>
-            </div>
-
-            <div className="validators-list">
-              <div className="validators-toolbar">
-                <div className="sort-pills">
-                  <button
-                    type="button"
-                    className={`sort-pill ${sortKey === 'stake' ? 'active' : ''}`}
-                    onClick={() => setSortKey('stake')}
-                  >
-                    Stake
-                  </button>
-                  <button
-                    type="button"
-                    className={`sort-pill ${sortKey === 'apy' ? 'active' : ''}`}
-                    onClick={() => setSortKey('apy')}
-                  >
-                    APY
-                  </button>
-                  <button
-                    type="button"
-                    className={`sort-pill ${sortKey === 'name' ? 'active' : ''}`}
-                    onClick={() => setSortKey('name')}
-                  >
-                    Name
-                  </button>
-                </div>
-                <div className="validators-cols mono">
-                  <span>STAKE</span>
-                  <span>APY</span>
-                  <span>FEE</span>
-                </div>
-              </div>
-              <div className="validators-progress">
-                <span className="muted">Stake data</span>
-                <span className="mono">{stakeLoad.total ? `${stakeLoad.done}/${stakeLoad.total}` : '—'}</span>
-              </div>
-
-              {sortedValidators.slice(0, 220).map((v) => {
-                const isSel = selectedId === v.id
-                const cs = chainStatsById[v.id]
-                const isActive = String(cs?.setType || '').toLowerCase() === 'active'
-                const commissionBps = commissionBpsFromWad(cs?.commissionWad ?? 0n)
-                const netApyBps = Math.round((baseApyBps * (10_000 - commissionBps)) / 10_000)
-                return (
-                  <button
-                    key={v.id}
-                    type="button"
-                    className={`validator-row ${isSel ? 'active' : ''}`}
-                    onClick={() => setSelectedId(v.id)}
-                  >
-                    <div className="validator-left">
-                      <div className="validator-logo">
-                        {v.logo ? <img src={v.logo} alt={v.name} /> : <span className="validator-fallback">{String(v.name || 'V').slice(0, 1)}</span>}
-                      </div>
-                      <div className="validator-meta">
-                        <div className="validator-name">
-                          {v.name}
-                          {isActive && <span className="pill green">ACTIVE</span>}
-                        </div>
-                        <div className="validator-sub mono">
-                          #{v.id}
-                          {v.website ? <span className="validator-site mono">{v.website.replace(/^https?:\/\//, '')}</span> : <span className="validator-site mono muted">—</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="validator-right">
-                      <div className="validator-metrics mono">
-                        <span className="validator-metric">{cs ? formatMonCompactFromWei(cs.totalStakeWei) : '—'}</span>
-                        <span className="validator-metric">{netApyBps ? formatApyFromBps(netApyBps) : '—'}</span>
-                        <span className="validator-metric">{commissionBps ? formatApyFromBps(commissionBps) : '0.00%'}</span>
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="stake-panel">
-            <div className="stake-head">
-              <div className="stake-title">Stake</div>
-              <div className="stake-sub">
-                Precompile: <a href="https://monadvision.com/address/0x0000000000000000000000000000000000001000" target="_blank" rel="noreferrer" className="mono">
-                  0x…1000
-                </a>
-              </div>
-            </div>
-
-            {!selected ? (
-              <div className="stake-empty">Select a validator to begin.</div>
-            ) : (
-              <div className="stake-content">
-                <div className="stake-selected">
-                  <div className="stake-selected-title">{selected.name || `Validator #${selectedId}`}</div>
-                  <div className="stake-selected-sub mono">
-                    Validator ID: {selectedId}
-                    {selectedChain && (
-                      <>
-                        {' '}• total {formatMonCompactFromWei(selectedChain.totalStakeWei)} MON
-                        {' '}• fee {formatApyFromBps(commissionBpsFromWad(selectedChain.commissionWad))}
-                        {baseApyBps ? (
-                          <>
-                            {' '}• est APY {formatApyFromBps(Math.round((baseApyBps * (10_000 - commissionBpsFromWad(selectedChain.commissionWad))) / 10_000))}
-                          </>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="stake-form">
-                  <label>
-                    <span>Amount (MON)</span>
-                    <input value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value)} inputMode="decimal" />
-                  </label>
-                </div>
-
-                <div className="stake-buttons sticky">
-                  <button className="staking-btn" type="button" disabled={!isConnected || needsChain || isBusy} onClick={onStake}>
-                    Delegate
-                  </button>
-                  <button className="staking-btn secondary" type="button" disabled={!isConnected || needsChain || isBusy} onClick={onUndelegate}>
-                    Undelegate
-                  </button>
-                  <button className="staking-btn secondary" type="button" disabled={!isConnected || needsChain || isBusy} onClick={onClaim}>
-                    Claim
-                  </button>
-                  <button className="staking-btn secondary" type="button" disabled={!isConnected || needsChain || isBusy} onClick={onCompound}>
-                    Compound
-                  </button>
-                  <button
-                    className="staking-btn"
-                    type="button"
-                    disabled={!isConnected || needsChain || isBusy || !pendingWithdrawals.length || (withdrawReady && !withdrawReady.ok)}
-                    onClick={onWithdraw}
-                    title={withdrawReady && !withdrawReady.ok ? `Available at epoch ${withdrawReady.needed}` : 'Withdraw'}
-                  >
-                    Withdraw
-                  </button>
-                </div>
-
-                {status && <div className="stake-status mono">{status}</div>}
-                {!isConnected && (
-                  <div className="stake-hint">
-                    Connect your wallet to stake. You can still browse validators without connecting.
-                  </div>
-                )}
-                {needsChain && (
-                  <div className="stake-hint">
-                    Switch your wallet network to Monad (chainId 143) to interact.
-                  </div>
-                )}
-                {withdrawReady && !withdrawReady.ok && pendingWithdrawals.length > 0 && (
-                  <div className="stake-hint">
-                    Withdraw will be available at epoch <span className="mono">{withdrawReady.needed}</span>.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
+  return <div className="staking-page"><div className="sk-shell">
+    <StakingHeader network={network} address={address} balance={balance} isConnected={isConnected} needsChain={needsChain} isBusy={isPending || isConnecting || isSwitching} onConnect={openWallet} onDisconnect={disconnect} onSwitchChain={() => switchChain({ chainId: monad.id })} activeSection={location.hash.slice(1) || 'validators'} onSectionClick={scrollToSection} />
+    {network.dataError && <div className="sk-banner" role="alert"><span>{network.dataError}</span><button className="sk-text-link" type="button" onClick={network.refresh}>Retry</button></div>}
+    {switchError && <p className="sk-warning" role="alert">{switchError.shortMessage || switchError.message}</p>}
+    {actions.transaction?.isPending && !actions.statusInfo && <div className="sk-banner" role="status"><div><strong>Transaction in progress · validator #{actions.transaction.validatorId}</strong><p>Submitted from {actions.transaction.address?.slice(0, 6)}…{actions.transaction.address?.slice(-4)}. {actions.transaction.text}</p>{txUrl(actions.transaction.hash) && <a className="sk-text-link" href={txUrl(actions.transaction.hash)} target="_blank" rel="noreferrer">View transaction</a>}</div>{actions.transaction.phase === 'unconfirmed' && <button className="sk-btn" type="button" onClick={actions.checkReceipt}>Check transaction</button>}</div>}
+    <div className="sk-workspace sk-anchor" id="validators" tabIndex={-1}>
+      <ValidatorList validators={network.validators} loading={network.loading || network.updating} error={network.dataError} lastUpdated={network.lastUpdated} sourceUpdatedAt={network.sourceUpdatedAt} onRefresh={network.refresh} selectedId={selectedId} onSelect={selectValidator} disabled={isPending} />
+      <div className="sk-action-rail" ref={actionPanel}><StakePanel validator={selected} positionData={positionData} epochInfo={network.epochInfo} balance={balance} isConnected={isConnected} needsChain={needsChain} canAct={canAct} isPending={isPending} activeTab={activeTab} onTabChange={setActiveTab} stakeAmount={stakeAmount} onStakeAmountChange={setStakeAmount} unstakeAmount={unstakeAmount} onUnstakeAmountChange={setUnstakeAmount} statusInfo={actions.statusInfo} transaction={actions.transaction} onCheckReceipt={actions.checkReceipt} onDelegate={async () => { if (await actions.delegate(stakeAmount)) setStakeAmount('') }} onUndelegate={async () => { if (await actions.undelegate(unstakeAmount, positionData.nextSlot)) setUnstakeAmount('') }} onWithdraw={actions.withdraw} onClaim={actions.claim} onCompound={actions.compound} onConnect={openWallet} onSwitchChain={() => switchChain({ chainId: monad.id })} onCalculatorClick={scrollToSection('calculator')} /></div>
+    </div>
+    <StakingCalculator network={network} selectedValidator={selected} stakeAmount={stakeAmount} onExploreValidators={scrollToSection('validators')} />
+    <div id="portfolio" className="sk-anchor" tabIndex={-1}><PortfolioPanel needsChain={needsChain} isConnected={onMonad} rows={portfolio.rows} totals={portfolio.totals} state={portfolio.state} onRefresh={portfolio.refresh} onSelect={id => selectValidator(id, true)} onConnect={needsChain ? () => switchChain({ chainId: monad.id }) : openWallet} /></div>
+    <section className="sk-lifecycle" aria-labelledby="sk-lifecycle-title"><div className="sk-section-heading"><h2 id="sk-lifecycle-title">Know the staking cycle.</h2><a className="sk-text-link" href="https://docs.monad.xyz/reference/staking/overview" target="_blank" rel="noreferrer">Monad documentation <ArrowUpRight size={15} /></a></div><ol><li><span>01</span><h3>Delegate</h3><p>Choose a validator and confirm the amount in your wallet.</p></li><li><span>02</span><h3>Activate</h3><p>Stake starts in epoch n + 1, or n + 2 if the boundary has passed.</p></li><li><span>03</span><h3>Earn & manage</h3><p>Rewards accrue when your validator produces blocks. Claim or compound manually.</p></li><li><span>04</span><h3>Unstake & withdraw</h3><p>Request unstaking, wait for the on-chain unlock epoch, then withdraw.</p></li></ol></section>
+    <footer className="sk-footer"><span>Native MON staking · Monad mainnet</span><span>Estimates vary with active stake, commission and validator performance.</span></footer>
+  </div>{walletOpen && <WalletPicker connectors={connectors} pending={isConnecting} error={connectionError} onSelect={connector => connect({ connector })} onClose={() => setWalletOpen(false)} />}</div>
 }
-

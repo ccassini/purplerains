@@ -301,7 +301,7 @@ export default function ShipPage() {
             computed from each live block's gasUsed x baseFee — no mock data. */}
         <div className="hb-metric hb-metric-burn" title="Base fee burned each block (EIP-1559) — the altar's share">
           <b>{st?.burnedLast > 0 ? st.burnedLast.toFixed(3) : '—'}</b>
-          <span>burn/block</span>
+          <span>burn/Mon</span>
         </div>
         <div className="hb-metric" title="Monad DeFi TVL via DefiLlama">
           <b>{formatTVL(monadTvl)}</b>

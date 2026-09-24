@@ -1,6 +1,7 @@
-import { createPublicClient, fallback, http } from 'viem'
+import { createPublicClient } from 'viem'
 import { logger } from './logger'
 import { monad } from '../config/monadChain'
+import { createMonadRpcFailover } from './rpcFailover'
 
 /**
  * Creates a viem public client connection to Monad.
@@ -8,80 +9,36 @@ import { monad } from '../config/monadChain'
  * @returns {Promise<{client: import('viem').PublicClient, chainId: number, latestBlock: bigint, config: Object}>}
  */
 export async function createMonadConnection(config) {
-  const expectedChainId = Number(config.chainId)
+  const expectedChainId = Number(config.chainId || monad.id)
   const endpoints = Array.isArray(config.rpcEndpoints) && config.rpcEndpoints.length
     ? config.rpcEndpoints
     : [config.rpcUrl]
 
-  let lastError = null
-
-  for (const endpoint of endpoints) {
-    try {
-      const client = createPublicClient({
-        chain: {
-          ...monad,
-          id: expectedChainId || monad.id,
-          rpcUrls: {
-            default: { http: [endpoint] },
-            public: { http: [endpoint] },
-          },
-        },
-        transport: http(endpoint, { timeout: 12_000, retryCount: 1 }),
-      })
-
-      const latestBlock = await client.getBlockNumber()
-      let chainId = expectedChainId
-      try {
-        const id = await client.getChainId()
-        if (Number.isFinite(id)) chainId = id
-      } catch (chainErr) {
-        logger.warn(`eth_chainId check skipped (${endpoint}):`, chainErr?.message || chainErr)
-      }
-
-      if (Number.isFinite(expectedChainId) && Number.isFinite(chainId) && chainId !== expectedChainId) {
-        throw new Error(`Chain ID mismatch. Expected ${expectedChainId}, got ${chainId}`)
-      }
-
-      logger.log(`Connected to Monad via ${endpoint} - Latest block: ${latestBlock}`)
-
-      return {
-        client,
-        // Back-compat alias used during migration; prefer `client`
-        web3: null,
-        chainId,
-        latestBlock,
-        config: {
-          ...config,
-          rpcUrl: endpoint,
-        },
-      }
-    } catch (error) {
-      lastError = error
-      logger.warn(`RPC connection failed (${endpoint}):`, error?.message || error)
-    }
-  }
-
-  // Last resort: multi-transport fallback client
   try {
+    const failover = createMonadRpcFailover(endpoints, { chainId: expectedChainId })
     const client = createPublicClient({
-      chain: monad,
-      transport: fallback(endpoints.map((url) => http(url, { timeout: 12_000, retryCount: 0 }))),
+      chain: {
+        ...monad,
+        id: expectedChainId,
+        rpcUrls: { default: { http: endpoints }, public: { http: endpoints } },
+      },
+      transport: failover.transport,
     })
+    // Every transport verifies its chain before serving its first request.
     const latestBlock = await client.getBlockNumber()
-    logger.log(`Connected to Monad via fallback transports - Latest block: ${latestBlock}`)
+    const endpoint = failover.getEndpoint()
+    logger.log(`Connected to Monad via ${endpoint} with runtime failover - Latest block: ${latestBlock}`)
     return {
       client,
       web3: null,
-      chainId: expectedChainId || monad.id,
+      chainId: expectedChainId,
       latestBlock,
-      config: { ...config, rpcUrl: endpoints[0] },
+      config: { ...config, rpcUrl: endpoint },
     }
   } catch (error) {
-    lastError = error
+    logger.error('Failed to connect to Monad:', error)
+    throw error
   }
-
-  logger.error('Failed to connect to Monad:', lastError)
-  throw lastError || new Error('No working RPC endpoint available')
 }
 
 /** Default Monad block interval used when timestamps collide (catch-up polls). */

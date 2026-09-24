@@ -3,6 +3,46 @@
  * Updates logo/name/loc/block via DOM only (no React re-render per ~0.3s block).
  */
 
+const proposerAnimations = new WeakMap()
+
+function animateProposer(root, target, same) {
+  const previous = proposerAnimations.get(root)
+  if (previous) {
+    previous.onfinish = null
+    previous.oncancel = null
+    previous.cancel()
+    proposerAnimations.delete(root)
+  }
+
+  // Clear legacy CSS pulses without a synchronous layout/offsetWidth read.
+  root.classList.remove('is-pop', 'is-tick')
+  if (!target || root.isConnected === false || target.isConnected === false) return
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  // Older browsers keep the live card static; data updates never need a reflow.
+  if (typeof target.animate !== 'function') return
+
+  const animation = target.animate(
+    same
+      ? [{ opacity: 0.5 }, { opacity: 1 }]
+      : [{ transform: 'scale(0.75)', opacity: 0.5 }, { transform: 'scale(1)', opacity: 1 }],
+    {
+      duration: same ? 180 : 280,
+      easing: same ? 'ease-out' : 'cubic-bezier(0.22, 1.35, 0.36, 1)',
+    },
+  )
+  proposerAnimations.set(root, animation)
+
+  const release = () => {
+    if (proposerAnimations.get(root) === animation) proposerAnimations.delete(root)
+    animation.onfinish = null
+    animation.oncancel = null
+    // Release the effect and target even if the card detached during its pulse.
+    animation.cancel()
+  }
+  animation.onfinish = release
+  animation.oncancel = release
+}
+
 /**
  * @param {{
  *   root: HTMLElement | null,
@@ -53,20 +93,8 @@ export function updateNowProposer(refs, next) {
 
   root.dataset.vid = vid
 
-  // Pop only when the producing validator changes (gmonads-like handoff feel)
-  if (!same) {
-    root.classList.remove('is-pop')
-    // Force restart CSS animation without layout thrash
-    void root.offsetWidth
-    root.classList.add('is-pop')
-    window.setTimeout(() => root.classList.remove('is-pop'), 380)
-  } else {
-    // Same proposer, new block — subtle block flash
-    root.classList.remove('is-tick')
-    void root.offsetWidth
-    root.classList.add('is-tick')
-    window.setTimeout(() => root.classList.remove('is-tick'), 220)
-  }
+  // Match the existing logo pop / block flash without blocking the arc's frame.
+  animateProposer(root, same ? block : img, same)
 }
 
 /**

@@ -1,0 +1,59 @@
+.term-perpl-markets { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; background: var(--term-surface, #080610); }
+.term-perpl-heading, .term-perpl-context-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 29px; flex: none; color: var(--term-accent, #c4b5fd); font-size: 9px; letter-spacing: .04em; }
+.term-perpl-heading { padding: 4px 8px; border-bottom: 1px solid var(--term-line-soft, rgba(139, 92, 246, .14)); background: var(--term-surface-panel, #0d0918); }
+.term-perpl-heading > span, .term-perpl-context-heading > span { display: inline-flex; align-items: center; gap: 6px; }
+.term-perpl-logo { display: block; width: 14px; height: 14px; flex: none; object-fit: contain; border-radius: 3px; }
+.term-perpl-status { display: inline-flex; align-items: center; gap: 5px; color: var(--term-muted, #a59ab6); font-size: 8px; letter-spacing: 0; white-space: nowrap; }
+.term-perpl-status i { width: 4px; height: 4px; flex: none; border-radius: 50%; background: currentColor; }
+.term-perpl-status--live { color: #61d7ad; }
+.term-perpl-status--error, .term-perpl-status--stale { color: #dfb26c; }
+.term-perpl-market-table { table-layout: fixed; }
+.term-perpl-market-table th:first-child { width: 37%; }
+.term-perpl-market-table th:nth-child(2) { width: 36%; }
+.term-perpl-market-table th:last-child { width: 27%; }
+.term-perpl-market-table th, .term-perpl-market-table td { padding-inline: 6px; font-size: 10px; }
+.term-perpl-market-table .term-identity strong, .term-perpl-market-table .term-identity small { max-width: 100%; }
+.term-perpl-market-table .term-identity small { font-size: 8px; }
+.term-perpl-market-note { flex: none; margin: 0; padding: 7px 8px; border-top: 1px solid var(--term-line-soft, rgba(139, 92, 246, .14)); color: var(--term-dim, #867993); font-size: 8px; }
+.term-perpl-tape { min-width: 445px; font-variant-numeric: tabular-nums; }
+.term-perpl-tape th, .term-perpl-tape td { padding-inline: 5px; }
+.term-perpl-tape .term-perpl-time { width: 59px; font-size: 9px; color: var(--term-dim, #867993); }
+.term-perpl-market-button { display: block; max-width: 80px; padding: 0; color: var(--term-text, #e5e7eb); background: none; border: 0; text-align: left; font-size: 10px!important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-perpl-market-button:hover { color: var(--term-accent, #c4b5fd); }
+.term-perpl-tape .term-perpl-tx { width: 22px; padding-inline: 3px; }
+.term-perpl-unknown { color: var(--term-dim, #867993); }
+.term-perpl-context-heading { min-height: 22px; margin-bottom: 12px; }
+.term-perpl-market-name { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-bottom: 9px; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, .28)); }
+.term-perpl-market-name strong { font-size: 14px; font-weight: 500; color: var(--term-text, #e5e7eb); }
+.term-perpl-market-name > span { min-width: 0; color: var(--term-muted, #a59ab6); font-size: 9px; text-align: right; overflow-wrap: anywhere; }
+.term-perpl-facts { margin-top: 3px; margin-bottom: 12px; }
+.term-perpl-facts > div { gap: 8px; }
+.term-perpl-facts dt { flex: none; }
+.term-perpl-facts dd { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.term-perpl-feed-time { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; color: var(--term-muted, #a59ab6); font-size: 9px; }
+.term-perpl-feed-time time { color: var(--term-text-soft, #cbc3d8); }
+.term-perpl-context-empty { margin: 12px 0 20px; color: var(--term-muted, #a59ab6); font-size: 10px; line-height: 1.7; }
+.term-perpl-error { margin: 8px 0; padding: 7px 0; border-top: 1px solid var(--term-line-soft, rgba(139, 92, 246, .14)); color: #dfb26c; font-size: 9px; }
+.term-perpl-error p { margin: 0; overflow-wrap: anywhere; }
+.term-perpl-error button { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; padding: 4px 6px; color: var(--term-accent, #c4b5fd); background: none; border: 1px solid var(--term-line, rgba(139, 92, 246, .28)); font-size: 9px; }
+.term-perpl-visit { display: inline-flex; align-items: center; gap: 5px; color: var(--term-accent, #c4b5fd); font-size: 10px; text-decoration: none; }
+.term-perpl-visit:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 700px) {
+  .term-perpl-tape { min-width: 410px; font-size: 10px; }
+  .term-perpl-tape th, .term-perpl-tape td { padding-inline: 4px; }
+  .term-perpl-tape .term-perpl-time { width: 53px; font-size: 8px; }
+  .term-perpl-market-button { max-width: 65px; font-size: 9px!important; }
+  .term-perpl-facts > div { font-size: 10px; }
+}
+@media (pointer: coarse) {
+  .term-perpl-market-table .term-identity { min-height: 34px; justify-content: center; }
+  .term-perpl-market-button { min-height: 32px; }
+  .term-perpl-error button, .term-perpl-visit { min-height: 36px; }
+}
+
+.term-perpl-tools > button { border: 1px solid var(--term-line); background: transparent; color: var(--term-muted); padding: 4px 7px; font-size: 9px; }
+.term-perpl-tools > button[aria-pressed=true] { background: var(--term-selected); color: var(--term-accent-bright); }
+.term-perpl-toolbar > span { color: var(--term-muted); font-size: 8px; white-space: nowrap; }
+.term-perpl-toolbar > select { max-width: 120px; }
+.term-perpl-status--partial { color: #dfb26c; }
+@media (max-width: 360px) { .term-perpl-toolbar > select { flex: 1; min-width: 58px; } .term-activity-tabs button { gap: 4px; font-size: 10px; } }

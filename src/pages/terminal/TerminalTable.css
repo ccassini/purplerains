@@ -1,0 +1,26 @@
+.term-table .term-identity-with-icons { flex-direction: row; align-items: center; gap: 6px; }
+.term-identity-copy { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; }
+.term-pair-icons { display: inline-flex; align-items: center; flex: none; padding-right: 2px; }
+.term-pair-icons .term-token-icon + .term-token-icon { margin-left: -4px; outline: 2px solid var(--term-surface-panel, #0d0918); }
+.term-table--feed .term-trade-path { display: grid; grid-template-columns: minmax(58px, 1fr) 9px minmax(58px, 1fr); align-items: center; gap: 4px; min-width: 151px; max-width: 242px; }
+.term-trade-leg { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 0; background: none; border: 0; text-align: left; color: var(--term-text, #e5e7eb); }
+.term-trade-leg:disabled { cursor: default; opacity: 1; }
+.term-trade-leg:not(:disabled):hover .term-trade-symbol { color: var(--term-accent-bright, #ddd3ff); }
+.term-trade-leg:focus-visible { outline: 1px solid var(--term-accent, #c4b5fd); outline-offset: 3px; }
+.term-trade-leg-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.term-trade-symbol { display: block; max-width: 86px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; line-height: 12px; font-weight: 500; }
+.term-trade-quantity { color: var(--term-muted, #a59ab6); font-size: 9px; line-height: 10px; font-variant-numeric: tabular-nums; }
+.term-trade-arrow { color: var(--term-dim, #867993); font-size: 11px; }
+.term-trade-missing { display: block; color: var(--term-dim, #867993); padding-left: 4px; }
+.term-table--feed .term-trade-cell { padding-block: 4px; }
+.term-table--feed .term-side--flow { max-width: 30px; white-space: normal; line-height: 11px; }
+@media (max-width: 700px) {
+  .term-table--feed .term-trade-path { grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 90px; max-width: 136px; }
+  .term-trade-leg { gap: 3px; }
+  .term-trade-leg-copy { flex-direction: row; align-items: baseline; gap: 4px; }
+  .term-trade-symbol { max-width: 52px; font-size: 9px; line-height: 11px; }
+  .term-trade-quantity { font-size: 8px; line-height: 10px; }
+  .term-trade-leg .term-token-icon { width: 13px; height: 13px; flex-basis: 13px; }
+  .term-trade-arrow { display: none; }
+  .term-trade-missing { font-size: 9px; line-height: 13px; padding-left: 16px; }
+}

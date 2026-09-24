@@ -5,16 +5,23 @@ import { fetchWorldValidators } from '../utils/gmonadsApi'
 import { fetchValidatorPerformance } from '../utils/validatorPerformanceApi'
 import { updateNowProposer, pushProposerTick } from '../utils/proposerTicker'
 import { formatStakeMon, formatCommission, normalizeHexId } from '../utils/worldShared'
+import { createWorld3DDiagnostics } from '../utils/world3DDiagnostics'
+import { createWorld3DArcLayer } from '../utils/world3DArcLayer'
+import { createWorld3DMarkerCache, isSphereOccludingMarker, updateWorld3DMarkerVisibility } from '../utils/world3DOcclusion'
+import {
+  createWorldArcClock,
+  getWorldArcTiming,
+  selectWorldBlock,
+  WORLD_BLOCK_CADENCE_MS,
+} from '../utils/worldArcTiming'
 import './MonadWorld3DPage.css'
-
-const ARC_COLORS = ['rgba(168, 85, 247, 0.35)', 'rgba(233, 213, 255, 0.98)', 'rgba(192, 132, 252, 0.45)']
 
 const MOON_TEXTURE_URL = 'https://threejs.org/examples/textures/planets/moon_1024.jpg'
 
 /** Moon in globe.gl scene (Earth at origin). */
-async function createCelestialDecor(globe, aliveRef, globeRef) {
+async function createCelestialDecor(globe, aliveRef, globeRef, diagnostics) {
   const three = await import('three')
-  const { CSS2DObject } = await import('three/examples/jsm/renderers/CSS2DRenderer.js')
+  if (!aliveRef.current || globeRef.current !== globe) return null
   const scene = globe.scene()
   const R = globe.getGlobeRadius()
 
@@ -33,8 +40,9 @@ async function createCelestialDecor(globe, aliveRef, globeRef) {
 
   const vCam = new three.Vector3()
   const vMark = new three.Vector3()
-  const vDir = new three.Vector3()
-  const raycaster = new three.Raycaster()
+  const vMoon = new three.Vector3()
+  const markerCache = createWorld3DMarkerCache(scene)
+  const moonRadius = R * 0.27
   const occlEps = Math.max(R * 0.04, 2)
 
   const applyMoonOcclusionToHtmlMarkers = () => {
@@ -42,28 +50,14 @@ async function createCelestialDecor(globe, aliveRef, globeRef) {
     if (!g) return
     const cam = g.camera()
     cam.getWorldPosition(vCam)
-    moonMesh.updateMatrixWorld(true)
-    scene.traverse((obj) => {
-      if (!(obj instanceof CSS2DObject) || !obj.element) return
+    // Include the pivot's current orbit rotation, before the next scene render.
+    moonMesh.getWorldPosition(vMoon)
+    for (const obj of markerCache.get(g.htmlElementsData())) {
       obj.getWorldPosition(vMark)
-      const dist = vCam.distanceTo(vMark)
-      if (dist < 1e-4) return
-      vDir.copy(vMark).sub(vCam).normalize()
-      raycaster.set(vCam, vDir)
-      const hits = raycaster.intersectObject(moonMesh, false)
-      const blocked = hits.length > 0 && hits[0].distance < dist - occlEps
-      const el = obj.element
-      const front = el.dataset.mw3GlobeFront !== '0'
-      if (blocked) {
-        el.style.opacity = '0'
-        el.style.visibility = 'hidden'
-        el.style.pointerEvents = 'none'
-      } else {
-        el.style.opacity = front ? '1' : '0'
-        el.style.visibility = front ? 'visible' : 'hidden'
-        el.style.pointerEvents = front ? 'auto' : 'none'
-      }
-    })
+      updateWorld3DMarkerVisibility(obj.element, {
+        moonOccluded: isSphereOccludingMarker(vCam, vMark, vMoon, moonRadius, occlEps),
+      })
+    }
   }
 
   let raf = 0
@@ -75,7 +69,9 @@ async function createCelestialDecor(globe, aliveRef, globeRef) {
     const dt = Math.min(0.07, (now - lastT) / 1000)
     lastT = now
     moonOrbitPivot.rotation.y += dt * 0.016
+    const started = performance.now()
     applyMoonOcclusionToHtmlMarkers()
+    diagnostics?.moon(performance.now() - started)
   }
 
   const start = () => {
@@ -90,9 +86,11 @@ async function createCelestialDecor(globe, aliveRef, globeRef) {
 
   const dispose = () => {
     stop()
+    markerCache.dispose()
     scene.remove(moonOrbitPivot)
     moonMesh.geometry.dispose()
     moonMesh.material.dispose()
+    moonTex.dispose()
   }
 
   return { start, stop, dispose }
@@ -278,24 +276,15 @@ function createNodeEl(v, onHover, onSelect) {
 }
 
 export default function MonadWorld3DPage() {
-  // Baseline matches Monad's live block time (~0.3s). The cadence adapts to the
-  // real inter-block interval but is capped at 300ms so bursts never run slower
-  // than 0.3s (it can go faster when blocks arrive faster).
-  const BLOCK_CADENCE_MS = 280
-  const ARC_MIN_CADENCE_MS = 170
-  const ARC_MAX_CADENCE_MS = 300
-  const ARC_TRAVEL_MS = 170
-
   const navigate = useNavigate()
-  const { latestBlock } = useMonad()
+  const { latestHead, latestBlock } = useMonad()
+  const liveBlock = selectWorldBlock(latestHead, latestBlock)
   const containerRef = useRef(null)
   const globeRef = useRef(null)
   const validatorsRef = useRef([])
   const byIdRef = useRef(new Map())
   const aliveRef = useRef(true)
-  const arcTemplateCacheRef = useRef(new Map())
-  const pendingPayloadRef = useRef(null)
-  const cadenceTimerRef = useRef(0)
+  const arcLayerRef = useRef(null)
   const blockValRef = useRef(null)
   const nowRootRef = useRef(null)
   const nowImgRef = useRef(null)
@@ -304,9 +293,8 @@ export default function MonadWorld3DPage() {
   const tickerElRef = useRef(null)
   const lastTickerAtRef = useRef(0)
   const perfReqRef = useRef(0)
-  const liveCadenceRef = useRef(BLOCK_CADENCE_MS)
-  const lastBlockAtRef = useRef(0)
-  const lastBlockNumRef = useRef(null)
+  const arcClockRef = useRef(createWorldArcClock())
+  const diagnosticsRef = useRef(null)
 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState(null)
@@ -329,11 +317,6 @@ export default function MonadWorld3DPage() {
     link.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap'
     document.head.appendChild(link)
   }, [])
-
-  const clearArcTimers = () => {
-    if (cadenceTimerRef.current) window.clearTimeout(cadenceTimerRef.current)
-    cadenceTimerRef.current = 0
-  }
 
   const openValidator = (v) => {
     if (!v) return
@@ -364,54 +347,32 @@ export default function MonadWorld3DPage() {
       })
   }
 
-  const buildArcTemplate = useCallback((proposerId, proposer) => {
-    const cached = arcTemplateCacheRef.current.get(proposerId)
-    if (cached) return cached
-    const arcs = []
-
-    // One arc per validator (every validator → proposer). Tube geometry is
-    // kept cheap via low arcCurveResolution/arcCircularResolution on the globe
-    // itself so rebuilding the full set on each arcsData() swap (~every 0.3s)
-    // doesn't jank, instead of dropping validators from the burst.
-    const all = validatorsRef.current
-
-    for (let i = 0; i < all.length; i += 1) {
-      const v = all[i]
-      if (v.id === proposerId) continue
-      const startLat = Number.isFinite(v.renderLat) ? v.renderLat : v.lat
-      const startLng = Number.isFinite(v.renderLon) ? v.renderLon : v.lon
-      const endLat = Number.isFinite(proposer.renderLat) ? proposer.renderLat : proposer.lat
-      const endLng = Number.isFinite(proposer.renderLon) ? proposer.renderLon : proposer.lon
-      const dLat = endLat - startLat
-      const dLon = endLng - startLng
-      const dist = Math.sqrt(dLat * dLat + dLon * dLon)
-      const n = Math.min(1, dist / 140)
-      arcs.push({
-        startLat,
-        startLng,
-        endLat,
-        endLng,
-        delay: n * 0.12,
-        altitude: 0.22 + n * 0.1,
-        stroke: 0.8 + n * 0.7,
-      })
+  const startArcAnimation = useCallback(({ proposer, timing }) => {
+    const layer = arcLayerRef.current
+    if (!layer || !aliveRef.current || document.visibilityState === 'hidden') return
+    const started = performance.now()
+    // Follow each verified block immediately. Independent flights can finish
+    // together when network deliveries bunch up; no playback queue adds lag.
+    const flight = { ...timing, ...getWorldArcTiming(WORLD_BLOCK_CADENCE_MS) }
+    if (!layer.start(proposer, flight, started)) return
+    diagnosticsRef.current?.burst(flight, performance.now() - started)
+    if (import.meta.env.DEV && containerRef.current) {
+      containerRef.current.dataset.block = String(flight.number)
+      containerRef.current.dataset.burstDurationMs = flight.total.toFixed(1)
+      containerRef.current.dataset.receiptToStartMs = String(Math.max(0, Date.now() - flight.receivedAt))
     }
-    
-    arcTemplateCacheRef.current.set(proposerId, arcs)
-    return arcs
   }, [])
-
-  const startArcAnimation = useCallback((payload) => {
-    if (!globeRef.current || !aliveRef.current) return
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    const { proposerId, proposer, block } = payload
-    const template = buildArcTemplate(proposerId, proposer)
-    globeRef.current.arcsData(template)
-  }, [buildArcTemplate])
 
   useEffect(() => {
     if (!containerRef.current) return
     aliveRef.current = true
+    // A shared alive ref becomes true again during StrictMode's second setup.
+    // Keep async imports and decor tied to this particular scene's lifetime.
+    const lifetime = { current: true }
+    let globeInstance = null
+    let diagnostics = null
+    let arcLayer = null
+    let restoreBeforeRender = () => {}
 
     const boot = async () => {
       try {
@@ -419,7 +380,7 @@ export default function MonadWorld3DPage() {
           import('globe.gl'),
           fetchWorldValidators(),
         ])
-        if (!aliveRef.current || !containerRef.current) return
+        if (!lifetime.current || !containerRef.current) return
 
         const validNodes = validators.filter(v =>
           Number.isFinite(v.lon) &&
@@ -430,7 +391,6 @@ export default function MonadWorld3DPage() {
         const spreadNodes = spreadOverlappingNodes(validNodes)
         validatorsRef.current = spreadNodes
         byIdRef.current = new Map(spreadNodes.map((v) => [v.id, v]))
-        arcTemplateCacheRef.current.clear()
         setCount(spreadNodes.length)
 
         const Globe = globeMod.default || globeMod
@@ -453,31 +413,30 @@ export default function MonadWorld3DPage() {
           .htmlLng(d => (Number.isFinite(d.renderLon) ? d.renderLon : d.lon))
           .htmlElement(d => createNodeEl(d, setHovered, openValidator))
           .htmlElementVisibilityModifier((el, isVisible) => {
-            el.dataset.mw3GlobeFront = isVisible ? '1' : '0'
-            el.style.opacity = isVisible ? '1' : '0'
-            el.style.visibility = isVisible ? 'visible' : 'hidden'
-            el.style.pointerEvents = isVisible ? 'auto' : 'none'
+            updateWorld3DMarkerVisibility(el, { globeFront: isVisible })
           })
-          // Keep accessors stable; only data/style params update per block.
-          .arcStartLat(d => d.startLat)
-          .arcStartLng(d => d.startLng)
-          .arcEndLat(d => d.endLat)
-          .arcEndLng(d => d.endLng)
-          .arcColor(() => ARC_COLORS)
-          .arcStroke(d => d.stroke)
-          .arcAltitude(d => d.altitude)
-          .arcDashLength(0.24)
-          .arcDashGap(0.92)
-          .arcDashInitialGap(d => 1 + d.delay)
-          .arcDashAnimateTime(ARC_TRAVEL_MS)
-          .arcsTransitionDuration(0)
-          // Low-poly tubes: full per-validator arc bursts (~200/block) stay cheap
-          // to rebuild every ~0.3s only if each tube's geometry is minimal.
-          .arcCurveResolution(10)
-          .arcCircularResolution(3)
           .enablePointerInteraction(false)
 
+        globeInstance = globe
         globeRef.current = globe
+        arcLayer = createWorld3DArcLayer(spreadNodes, globe.getGlobeRadius())
+        arcLayerRef.current = arcLayer
+        const scene = globe.scene()
+        scene.add(arcLayer.group)
+        const previousBeforeRender = scene.onBeforeRender
+        scene.onBeforeRender = function (...args) {
+          previousBeforeRender.apply(this, args)
+          arcLayer.update(performance.now())
+        }
+        restoreBeforeRender = () => { scene.onBeforeRender = previousBeforeRender }
+        // Warm the persistent shader once during loading, before live flights.
+        // Synchronous setup avoids leaving Three's async compile poll attached
+        // to disposed materials if the user leaves during scene initialization.
+        globe.renderer().compile(scene, globe.camera())
+        if (import.meta.env.DEV) {
+          diagnostics = createWorld3DDiagnostics(containerRef.current, globe.renderer())
+          diagnosticsRef.current = diagnostics
+        }
 
         // Clamp DPR — full retina (2x) pixel load causes jank with per-block
         // arc bursts; 1.5 is visually indistinguishable on this scene.
@@ -502,11 +461,17 @@ export default function MonadWorld3DPage() {
 
         let celestial = { start() {}, stop() {}, dispose() {} }
         try {
-          celestial = await createCelestialDecor(globe, aliveRef, globeRef)
+          const decor = await createCelestialDecor(globe, lifetime, globeRef, diagnostics)
+          if (decor) celestial = decor
+          if (!lifetime.current) {
+            celestial.dispose()
+            return
+          }
           celestial.start()
         } catch {
           // Optional decor — globe still works without moon
         }
+        if (!lifetime.current) return
 
         const resize = () => {
           if (!containerRef.current || !globeRef.current) return
@@ -519,6 +484,7 @@ export default function MonadWorld3DPage() {
         const onVisibilityChange = () => {
           if (!globeRef.current) return
           if (document.visibilityState === 'hidden') {
+            arcLayer.clear()
             globeRef.current.pauseAnimation()
             celestial.stop()
           } else {
@@ -529,7 +495,7 @@ export default function MonadWorld3DPage() {
         document.addEventListener('visibilitychange', onVisibilityChange)
         onVisibilityChange()
 
-        if (!aliveRef.current) return
+        if (!lifetime.current) return
         setReady(true)
 
         return () => {
@@ -538,64 +504,50 @@ export default function MonadWorld3DPage() {
           celestial.dispose()
         }
       } catch (e) {
+        if (!lifetime.current) return
         setError(e?.message || '3D globe failed to load')
       }
     }
 
     let cleanup
-    boot().then(c => { cleanup = c })
+    boot().then(c => {
+      if (!lifetime.current) c?.()
+      else cleanup = c
+    })
     return () => {
+      lifetime.current = false
       aliveRef.current = false
       if (cleanup) cleanup()
-      clearArcTimers()
-      if (globeRef.current && globeRef.current._destructor) globeRef.current._destructor()
-      globeRef.current = null
+      diagnostics?.dispose()
+      if (diagnosticsRef.current === diagnostics) diagnosticsRef.current = null
+      restoreBeforeRender()
+      arcLayer?.dispose()
+      if (arcLayerRef.current === arcLayer) arcLayerRef.current = null
+      globeInstance?._destructor?.()
+      // globe.gl clears its data layers but does not dispose the host renderer.
+      globeInstance?.controls().dispose()
+      globeInstance?.renderer().dispose()
+      if (globeRef.current === globeInstance) globeRef.current = null
     }
   }, [])
 
   useEffect(() => {
-    if (!ready || !globeRef.current) return
-    if (cadenceTimerRef.current) window.clearTimeout(cadenceTimerRef.current)
-    let stopped = false
+    if (!liveBlock || !globeRef.current || !ready) return
+    const tickTs = performance.now()
+    const timing = arcClockRef.current(liveBlock, tickTs)
+    if (!timing) return
+    const proposer = liveBlock.proposerValidator
+    const num = timing.number
+    const p = byIdRef.current.get(proposer.id)
 
-    // Self-adjusting loop: each tick fires at the live block cadence (measured
-    // from real blocks), so the arc bursts stay in lock-step with Monad's speed.
-    const runTick = () => {
-      if (stopped) return
-      const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
-      const payload = pendingPayloadRef.current
-      if (!hidden && payload && globeRef.current && aliveRef.current) {
-        pendingPayloadRef.current = null
-        // Keep the arc flight just under the cadence so bursts never overlap.
-        const travel = Math.max(120, Math.min(liveCadenceRef.current - 60, 180))
-        try { globeRef.current.arcDashAnimateTime(travel) } catch { /* globe may be torn down or not expose this call */ }
-        startArcAnimation(payload)
-      }
-      cadenceTimerRef.current = window.setTimeout(runTick, liveCadenceRef.current)
-    }
-
-    cadenceTimerRef.current = window.setTimeout(runTick, liveCadenceRef.current)
-    return () => {
-      stopped = true
-      if (cadenceTimerRef.current) window.clearTimeout(cadenceTimerRef.current)
-      cadenceTimerRef.current = 0
-    }
-  }, [ready, startArcAnimation])
-
-  useEffect(() => {
-    if (!latestBlock || !globeRef.current || !ready) return
-    const proposer = latestBlock.proposerValidator
-    if (!proposer?.id) return
-
-    const num = typeof latestBlock.number === 'string'
-      ? parseInt(latestBlock.number, 16)
-      : latestBlock.number
+    // Begin at block receipt; a separate cadence timer adds up to one whole
+    // block of latency and can overwrite pending blocks before they are drawn.
+    if (p) startArcAnimation({ proposerId: proposer.id, proposer: p, timing })
     if (blockValRef.current) {
       blockValRef.current.textContent = `#${Number(num).toLocaleString()}`
     }
     setBlockNum((prev) => (prev == null ? num : prev))
 
-    const p = byIdRef.current.get(proposer.id)
     const name = p?.name || proposer.name || `Validator #${proposer.id}`
     const logo = p?.localLogo || p?.logo || proposer.localLogo || proposer.logo || ''
     const loc = [p?.city || proposer.city, p?.country || proposer.country].filter(Boolean).join(', ')
@@ -610,7 +562,6 @@ export default function MonadWorld3DPage() {
       { id: proposer.id, name, logo, loc, block: num },
     )
 
-    const tickTs = performance.now()
     if (tickTs - lastTickerAtRef.current >= 450) {
       lastTickerAtRef.current = tickTs
       pushProposerTick(tickerElRef.current, {
@@ -626,26 +577,7 @@ export default function MonadWorld3DPage() {
         blockClass: 'mw3-tick-block',
       })
     }
-
-    // Measure the real inter-block interval and smooth it into the live cadence,
-    // so the arc bursts track Monad's actual block speed (~0.3s) instead of a
-    // fixed number — if the chain speeds up or slows down, the arcs follow.
-    const nowTs = performance.now()
-    if (lastBlockNumRef.current != null && num > lastBlockNumRef.current && lastBlockAtRef.current) {
-      const perBlock = (nowTs - lastBlockAtRef.current) / (num - lastBlockNumRef.current)
-      if (perBlock > 60 && perBlock < 5000) {
-        const ema = liveCadenceRef.current * 0.7 + perBlock * 0.3
-        liveCadenceRef.current = Math.max(ARC_MIN_CADENCE_MS, Math.min(ARC_MAX_CADENCE_MS, ema))
-      }
-    }
-    lastBlockAtRef.current = nowTs
-    lastBlockNumRef.current = num
-
-    if (!p) return
-
-    // Keep only the latest block; it's drawn on the next live-cadence tick.
-    pendingPayloadRef.current = { proposerId: proposer.id, proposer: p, block: num }
-  }, [latestBlock, ready])
+  }, [liveBlock, ready, startArcAnimation])
 
   const zoomIntervalRef = useRef(0)
 

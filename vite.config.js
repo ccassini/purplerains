@@ -1,9 +1,23 @@
 /* eslint-env node */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import perplContext from './api/perpl-context.js'
+import perplStream from './api/perpl-stream.js'
+
+function perplRoutes() {
+  const configure = (server) => {
+    server.middlewares.use((req, res, next) => {
+      const path = req.url?.split('?')[0]
+      const handler = path === '/api/perpl-context' ? perplContext : path === '/api/perpl-stream' ? perplStream : null
+      if (!handler) return next()
+      Promise.resolve(handler(req, res)).catch(next)
+    })
+  }
+  return { name: 'perpl-public-market-relay', configureServer: configure, configurePreviewServer: configure }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), perplRoutes()],
   test: {
     environment: 'node',
     include: ['src/**/*.{test,spec}.{js,jsx}'],

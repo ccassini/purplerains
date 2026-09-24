@@ -1,0 +1,55 @@
+.term-chain-table { table-layout: fixed; min-width: 390px; font-variant-numeric: tabular-nums; }
+.term-chain-table th, .term-chain-table td { padding-inline: 6px; }
+.term-chain-table th.term-chain-time { width: 62px; }
+.term-chain-table td.term-chain-time { font-size: 9px; color: var(--term-muted, #a59ab6); }
+.term-chain-table .term-chain-amount { width: 105px; }
+.term-chain-table .term-chain-height { width: 100px; }
+.term-chain-table .term-chain-count { width: 47px; }
+.term-chain-table .term-chain-fill { width: 76px; }
+.term-chain-table .term-chain-transaction { width: 24px; padding-inline: 4px; }
+.term-chain-unit { color: var(--term-dim, #867993); font-size: 8px; }
+.term-chain-native { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.term-chain-native .term-token-icon { width: 13px; height: 13px; flex-basis: 13px; }
+.term-chain-value-kind { display: block; color: var(--term-muted, #a59ab6); font-size: 8px; line-height: 11px; margin-top: 2px; }
+.term-chain-wallet { max-width: 100%; font-variant-numeric: tabular-nums; }
+.term-chain-block-link { color: var(--term-accent, #c4b5fd); text-decoration: none; font-size: 10px; }
+.term-chain-block-link:hover { color: var(--term-accent-bright, #ddd3ff); text-decoration: underline; text-underline-offset: 3px; }
+.term-chain-validator { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
+.term-chain-unknown { color: var(--term-dim, #867993); }
+.term-chain-utilization { position: relative; display: inline-block; width: 59px; padding-block: 2px; font-size: 10px; }
+.term-chain-utilization > i { position: absolute; inset: auto auto 0 0; height: 2px; background: var(--term-accent, #c4b5fd); opacity: .45; transition: none; }
+.term-chain-utilization > span { position: relative; }
+.term-chain-table--blocks.is-expanded { min-width: 770px; }
+.term-chain-table--transfers.is-expanded { min-width: 540px; }
+.term-chain-table--blocks.is-expanded .term-chain-height { width: 110px; }
+.term-chain-table--blocks.is-expanded .term-chain-count { width: 55px; }
+.term-chain-table--blocks.is-expanded th:nth-child(4) { width: 125px; }
+.term-chain-table button, .term-chain-table a { transition: none; }
+.term-chain-table button:focus-visible, .term-chain-table a:focus-visible { outline: 1px solid var(--term-accent, #c4b5fd); outline-offset: 3px; }
+.term-block-context { font-variant-numeric: tabular-nums; }
+.term-block-facts { margin-top: 9px; margin-bottom: 13px; }
+.term-block-leaders { width: 100%; border-collapse: collapse; table-layout: fixed; text-align: left; margin-bottom: 13px; }
+.term-block-leaders thead th { padding: 0 0 7px; color: var(--term-muted, #a59ab6); font-size: 8px; font-weight: 400; }
+.term-block-leaders th:first-child, .term-block-leaders td:first-child { width: 20px; color: var(--term-dim, #867993); }
+.term-block-leaders th:nth-child(3) { width: 44px; }
+.term-block-leaders th:last-child { width: 45px; }
+.term-block-leaders td, .term-block-leaders tbody th { height: 29px; border-top: 1px solid var(--term-line-soft, rgba(139, 92, 246, 0.14)); padding: 5px 0; font-size: 9px; font-weight: 400; color: var(--term-text-soft, #cbc3d8); }
+.term-block-leaders th:nth-child(n+3), .term-block-leaders td:nth-child(n+3) { text-align: right; }
+.term-block-leaders tbody th > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+.term-block-leaders td:last-child { color: var(--term-accent-soft, #ab95cd); }
+.term-block-waiting { color: var(--term-muted, #a59ab6); font-size: 10px; line-height: 1.7; margin: 20px 0; }
+
+@media (max-width: 700px) {
+  .term-chain-table { min-width: 355px; }
+  .term-chain-table th, .term-chain-table td { padding-inline: 4px; }
+  .term-chain-table th.term-chain-time { width: 58px; }
+  .term-chain-table .term-chain-height { width: 91px; }
+  .term-chain-table .term-chain-count { width: 34px; }
+  .term-chain-table .term-chain-fill { width: 61px; }
+  .term-chain-table .term-chain-amount { width: 83px; }
+  .term-chain-table .term-chain-transaction { width: 19px; }
+  .term-chain-table .term-chain-wallet { font-size: 9px!important; }
+  .term-chain-utilization { width: 51px; }
+  .term-block-leaders td, .term-block-leaders tbody th { height: 32px; font-size: 10px; }
+  .term-block-leaders thead th { font-size: 9px; }
+}

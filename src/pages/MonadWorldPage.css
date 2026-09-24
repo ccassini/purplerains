@@ -51,7 +51,7 @@
 }
 
 /* Disable marker hit-testing during map drag — saves 200+ hit-tests per frame */
-.mw.mw-dragging .vm { pointer-events: none; }
+.mw-map.mw-dragging .vm { pointer-events: none !important; }
 
 .mw .maplibregl-canvas { outline: none; }
 .mw .maplibregl-ctrl-attrib,

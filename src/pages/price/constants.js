@@ -2,6 +2,15 @@ export const BINANCE_FAPI_EXCHANGE_INFO = 'https://fapi.binance.com/fapi/v1/exch
 export const BINANCE_FAPI_TICKER_24H = 'https://fapi.binance.com/fapi/v1/ticker/24hr'
 export const BINANCE_FSTREAM_WS = 'wss://fstream.binance.com/ws'
 
+/** BTC spot price — prefer spot REST/WS; futures stream is geo-blocked in many regions */
+export const BINANCE_SPOT_TICKER_PRICE = 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'
+export const BINANCE_SPOT_TICKER_24H = 'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'
+export const BINANCE_SPOT_WS = 'wss://stream.binance.com:9443/ws'
+export const COINBASE_BTC_SPOT = 'https://api.coinbase.com/v2/prices/BTC-USD/spot'
+export const BYBIT_BTC_TICKER = 'https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT'
+export const BTC_PRICE_POLL_MS = 12_000
+export const BTC_CHANGE_POLL_MS = 60_000
+
 export const DEXSCREENER_API = 'https://api.dexscreener.com'
 
 export const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
@@ -55,19 +64,22 @@ export const LINE_TICK_MS = 100
 export const LINE_SMOOTH_ALPHA = 0.32
 export const SNAKE_POINTS = 80
 export const SNAKE_PAD_Y = 16
-// How much from the right edge the snake/head should stop.
-export const SNAKE_RIGHT_INSET = 160
+/** Footer strip for the rolling-window time axis. */
+export const CHART_PAD_BOTTOM = 26
+export const AXIS_TICKS = 5
+export const HEAD_RADIUS = 14
+/**
+ * Micro-oscillation on the line, scaled per point by local tick-to-tick
+ * velocity. Near zero at rest so a flat price stays flat, growing where the
+ * price is actually moving fast.
+ */
+export const WOBBLE_BASE_PX = 0.35
+export const WOBBLE_SLOPE_PX = 5
+/** Per-tick move (as a fraction of the visible range) that earns full wobble. */
+export const WOBBLE_VELOCITY_REF = 0.06
 
-export const CANDLE_STYLE = {
-  upColor: 'rgba(188, 255, 0, 0.72)',
-  downColor: 'rgba(255, 82, 96, 0.82)',
-  wickUpColor: 'rgba(210, 255, 100, 0.95)',
-  wickDownColor: 'rgba(255, 170, 175, 0.95)',
-  borderUpColor: 'rgba(188, 255, 0, 1)',
-  borderDownColor: 'rgba(255, 96, 110, 1)',
-  priceLineVisible: true,
-  lastValueVisible: true,
-  priceLineWidth: 1,
-  priceLineColor: 'rgba(88, 166, 255, 0.95)',
-}
+/** Buy/sell pressure window for the flow meter. */
+export const FLOW_WINDOW_MS = 12_000
+
+/** How long React state batches trade/price updates (chart is unaffected). */
 export const UI_FLUSH_MS = 32

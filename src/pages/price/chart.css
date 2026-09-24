@@ -1,0 +1,172 @@
+/* Live line chart + order-flow meter.
+   Co-located with LiveLineChart.jsx / FlowMeter.jsx; tokens come from the
+   .price-page root in PricePage.css. */
+
+.pr-chart {
+  padding: 12px;
+  gap: 10px;
+  background:
+    radial-gradient(600px 300px at 50% 0%, rgba(124, 107, 255, 0.08), transparent 62%),
+    linear-gradient(180deg, #12101c 0%, #08060f 100%);
+}
+
+.pr-chart-shell {
+  position: relative;
+  flex: 1;
+  min-height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(124, 107, 255, 0.12);
+  background:
+    radial-gradient(800px 400px at 50% 100%, rgba(124, 107, 255, 0.08), transparent 62%),
+    linear-gradient(180deg, #0a0a12 0%, #080810 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+
+.pr-chart-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.pr-chart-watermark__pair {
+  font-size: clamp(2.4rem, 11vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  background: linear-gradient(135deg, rgba(168, 139, 255, 0.085), rgba(124, 107, 255, 0.04));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.pr-chart-watermark__sub {
+  margin-top: 5px;
+  font-size: clamp(0.7rem, 2vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  color: rgba(168, 139, 255, 0.075);
+}
+
+.pr-chart-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── Order flow ──────────────────────────────────────────────────────────── */
+
+.pr-flow {
+  flex-shrink: 0;
+  padding: 9px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 107, 255, 0.12);
+  background: rgba(14, 10, 26, 0.62);
+}
+
+.pr-flow__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.pr-flow__label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(168, 139, 255, 0.75);
+}
+
+.pr-flow__window {
+  font-family: var(--pr-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.55rem;
+  color: var(--pr-text3);
+}
+
+/* The track carries the sell side; the buy overlay scales over it. Animating a
+   transform keeps the meter off the layout path even as it updates each second. */
+.pr-flow__bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--pr-neg), rgba(255, 128, 146, 0.55));
+}
+
+.pr-flow__buy {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(var(--f, 0.5));
+  transform-origin: left center;
+  background: linear-gradient(90deg, rgba(92, 224, 168, 0.55), var(--pr-pos));
+  transition: transform 400ms var(--pr-ease);
+  will-change: transform;
+}
+
+.pr-flow__mid {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: rgba(244, 241, 255, 0.28);
+}
+
+.pr-flow__legs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 7px;
+  font-family: var(--pr-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.pr-flow__leg { display: inline-flex; align-items: center; gap: 5px; }
+.pr-flow__leg.is-buy { color: var(--pr-pos); }
+.pr-flow__leg.is-sell { color: var(--pr-neg); }
+
+.pr-flow__leg-tag {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}
+
+.pr-flow__ratio {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  color: var(--pr-text2);
+  border: 1px solid var(--pr-line);
+  background: rgba(24, 18, 40, 0.6);
+}
+
+.pr-flow.is-buy .pr-flow__ratio { color: var(--pr-pos); border-color: rgba(92, 224, 168, 0.26); }
+.pr-flow.is-sell .pr-flow__ratio { color: var(--pr-neg); border-color: rgba(255, 128, 146, 0.26); }
+
+@media (max-width: 768px) {
+  .pr-chart { padding: 9px; }
+  .pr-chart-shell { min-height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-flow__buy { transition: none; }
+}

@@ -1,5 +1,6 @@
 import { erc20Abi, hexToBigInt } from 'viem'
 import { logger } from './logger'
+import { isRequestBudgetError } from './requestBudget'
 import { MONAD_DEX_ROUTERS, MONAD_STABLECOINS } from '../config/monadNetwork'
 
 export const ERC20_TRANSFER_TOPIC =
@@ -114,7 +115,7 @@ export async function getTokenMetadata(client, cache, tokenAddress) {
   if (cache.has(key)) return cache.get(key)
 
   if (KNOWN_TOKENS[key]) {
-    const knownToken = { address: key, ...KNOWN_TOKENS[key] }
+    const knownToken = { address: key, ...KNOWN_TOKENS[key], decimalsVerified: true }
     cache.set(key, knownToken)
     return knownToken
   }
@@ -124,6 +125,12 @@ export async function getTokenMetadata(client, cache, tokenAddress) {
       client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'decimals' }),
       client.readContract({ address: tokenAddress, abi: erc20Abi, functionName: 'symbol' }),
     ])
+
+    // An intentional budget deferral provides no metadata evidence. Do not
+    // cache guessed decimals/symbols or calculate a partial swap from it.
+    for (const result of [decimalsResult, symbolResult]) {
+      if (result.status === 'rejected' && isRequestBudgetError(result.reason)) throw result.reason
+    }
 
     const onChainDecimals =
       decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) : null
@@ -139,18 +146,20 @@ export async function getTokenMetadata(client, cache, tokenAddress) {
     // On-chain decimals() is ground truth and is never overridden. The
     // USD-substring heuristic only fills in when the call itself failed.
     let finalDecimals
-    if (onChainDecimals !== null && Number.isInteger(onChainDecimals) && onChainDecimals >= 0) {
+    const decimalsVerified = onChainDecimals !== null && Number.isInteger(onChainDecimals) && onChainDecimals >= 0 && onChainDecimals <= 255
+    if (decimalsVerified) {
       finalDecimals = onChainDecimals
     } else {
       finalDecimals = isStableSymbol(symbol) ? 6 : 18
     }
 
-    const meta = { address: key, decimals: finalDecimals, symbol }
+    const meta = { address: key, decimals: finalDecimals, decimalsVerified, symbol }
     cache.set(key, meta)
     return meta
   } catch (error) {
+    if (isRequestBudgetError(error)) throw error
     logger.error('Failed to fetch token metadata', tokenAddress, error.message)
-    const fallback = { address: key, decimals: 18, symbol: 'TKN' }
+    const fallback = { address: key, decimals: 18, decimalsVerified: false, symbol: 'TKN' }
     cache.set(key, fallback)
     return fallback
   }
@@ -161,6 +170,9 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
 
   try {
     const receipt = await client.getTransactionReceipt({ hash: tx.hash })
+    if (receipt && ['reverted', 'failed', '0x0', 0, false].includes(receipt.status)) {
+      return { ...tx, status: 'reverted' }
+    }
     if (!receipt || !Array.isArray(receipt.logs) || !receipt.logs.length) {
       return tx
     }
@@ -198,6 +210,8 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
         const toAddress = topicToAddress(log.topics[2])
         const tokenAddr = log.address?.toLowerCase()
         if (!fromAddress || !toAddress || !tokenAddr) continue
+        // Only the sender's paid/received legs contribute to this observation.
+        if (fromAddress !== sender && toAddress !== sender) continue
 
         const meta = await getTokenMetadata(client, cache, tokenAddr)
         const rawAmount = hexToBigInt(log.data)
@@ -211,6 +225,7 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
           amount,
           symbol: meta?.symbol || 'TKN',
           decimals: meta?.decimals ?? 18,
+          decimalsVerified: meta?.decimalsVerified === true,
           isStable: isStableSymbol(meta?.symbol),
         }
 
@@ -219,7 +234,8 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
         if (contractAddress && (fromAddress === contractAddress || toAddress === contractAddress)) {
           if (toAddress === sender) outTransfers.push(transferData)
         }
-      } catch {
+      } catch (error) {
+        if (isRequestBudgetError(error)) throw error
         continue
       }
     }
@@ -241,6 +257,7 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
       enriched.baseSymbol = tokenInLog.symbol
       enriched.baseTokenAddress = tokenInLog.tokenAddress
       enriched.baseDecimals = tokenInLog.decimals
+      enriched.baseDecimalsVerified = tokenInLog.decimalsVerified
     }
 
     if (tokenOutLog) {
@@ -248,6 +265,7 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
       enriched.quoteSymbol = tokenOutLog.symbol
       enriched.quoteTokenAddress = tokenOutLog.tokenAddress
       enriched.quoteDecimals = tokenOutLog.decimals
+      enriched.quoteDecimalsVerified = tokenOutLog.decimalsVerified
     }
 
     if (enriched.baseSymbol && enriched.quoteSymbol) {
@@ -269,12 +287,14 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
     }
 
     let usdValue = null
+    let usdValueVerified = false
     if (
       typeof enriched.baseAmount === 'number' &&
       enriched.baseAmount > 0 &&
       isStableSymbol(enriched.baseSymbol)
     ) {
       usdValue = enriched.baseAmount
+      usdValueVerified = enriched.baseDecimalsVerified === true
     }
     if (
       usdValue === null &&
@@ -283,15 +303,18 @@ export async function enrichDefiTransactionFromReceipt(client, cache, tx) {
       isStableSymbol(enriched.quoteSymbol)
     ) {
       usdValue = enriched.quoteAmount
+      usdValueVerified = enriched.quoteDecimalsVerified === true
     }
     // No stable side means no honest dollar figure: usdValue is omitted
     // entirely rather than guessed from token amounts.
     if (usdValue !== null && Number.isFinite(usdValue)) {
       enriched.usdValue = usdValue
+      enriched.usdValueVerified = usdValueVerified
     }
 
     return enriched
   } catch (error) {
+    if (isRequestBudgetError(error)) return tx
     logger.error('Failed to enrich DeFi transaction from receipt', tx.hash, error.message)
     return tx
   }

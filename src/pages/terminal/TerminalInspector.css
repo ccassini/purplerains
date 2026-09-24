@@ -1,0 +1,173 @@
+.term-inspector-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(4 3 10 / 76%);
+  overscroll-behavior: contain;
+}
+
+.term-inspector {
+  width: 430px;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--term-text, #e5e7eb);
+  background: var(--term-surface, #080610);
+  border-left: 1px solid var(--term-line, rgba(139, 92, 246, 0.28));
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: -20px 0 70px rgb(0 0 0 / 28%);
+  outline: none;
+}
+
+.term-inspector *, .term-inspector *::before, .term-inspector *::after { box-sizing: border-box; }
+.term-inspector button, .term-inspector a { -webkit-tap-highlight-color: transparent; }
+.term-inspector button { cursor: pointer; font: inherit; }
+.term-inspector button:focus-visible, .term-inspector a:focus-visible { outline: 2px solid var(--term-accent, #c4b5fd); outline-offset: 3px; }
+.term-inspector a { color: var(--term-accent, #c4b5fd); text-decoration: none; }
+.term-inspector a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.term-inspector-header { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 29px 24px 23px; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-header > div { min-width: 0; }
+.term-inspector-eyebrow { display: block; color: var(--term-muted, #a59ab6); font: 10px/1.5 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .12em; }
+.term-inspector h2 { margin: 9px 0 0; font-size: 25px; font-weight: 600; line-height: 1.2; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.term-inspector-close { flex: none; display: grid; place-items: center; width: 38px; height: 38px; margin-top: -5px; color: var(--term-muted, #a59ab6); border: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); border-radius: 8px; background: var(--term-panel, #0d0918); }
+.term-inspector-close:hover { color: var(--term-text, #e5e7eb); border-color: var(--term-muted, #a59ab6); }
+.term-inspector-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 22px 24px 30px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--term-scrollbar, rgba(139, 92, 246, 0.35)) transparent; }
+.term-inspector-intro { margin: 0 0 17px; color: var(--term-muted, #a59ab6); font-size: 13px; line-height: 1.65; }
+.term-inspector-address { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; background: var(--term-panel, #0d0918); border: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); border-radius: 8px; }
+.term-inspector-address code { flex: 1; min-width: 0; color: var(--term-text-soft, #cbc3d8); font: 11px/1.8 'JetBrains Mono', ui-monospace, monospace; overflow-wrap: anywhere; user-select: all; }
+.term-inspector-address button { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 5px; color: var(--term-accent, #c4b5fd); background: transparent; }
+.term-inspector-address button:hover { background: var(--term-selected, rgba(139, 92, 246, 0.12)); }
+.term-inspector-copy-status { min-height: 15px; margin: 5px 0 10px; color: var(--term-muted, #a59ab6); font-size: 11px; line-height: 1.4; }
+.term-inspector-links { display: flex; flex-wrap: wrap; gap: 12px 21px; margin-bottom: 22px; }
+.term-inspector-link { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; font-size: 12px; font-weight: 500; }
+.term-inspector-quality { margin: 0 0 18px; padding: 12px 0; border-top: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); font-size: 11px; line-height: 1.5; }
+.term-inspector-quality dl { margin: 0; }
+.term-inspector-quality dl > div { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr); gap: 12px; padding: 4px 0; }
+.term-inspector-quality dt { color: var(--term-muted, #a59ab6); }
+.term-inspector-quality dd { min-width: 0; margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.term-inspector-quality dd > span { color: var(--term-muted, #a59ab6); }
+.term-inspector-quality .term-inspector-coverage { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-quality .term-inspector-note { margin-top: 6px; overflow-wrap: anywhere; }
+.term-inspector-quality .term-inspector-note > strong { font-weight: 500; }
+.term-inspector-quality button { min-height: 24px; margin-left: 8px; padding: 0 4px; color: var(--term-accent, #c4b5fd); border: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); background: transparent; font-size: inherit; }
+.term-inspector-quality button:hover { border-color: var(--term-accent, #c4b5fd); }
+.term-inspector-quality button:disabled { cursor: default; opacity: .5; }
+.term-inspector-metrics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px 14px; padding: 22px 0; margin: 0; border-top: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-metric { min-width: 0; }
+.term-inspector-metric dt { margin-bottom: 7px; color: var(--term-muted, #a59ab6); font-size: 11px; line-height: 1.4; }
+.term-inspector-metric dd { margin: 0; font-size: 19px; font-weight: 500; line-height: 1.25; letter-spacing: -.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.term-inspector .term-inspector-positive { color: #71d9b0; }
+.term-inspector .term-inspector-negative { color: #f393a6; }
+.term-inspector-note { margin: 14px 0 0; color: var(--term-muted, #a59ab6); font-size: 11px; line-height: 1.75; }
+.term-inspector-disclosure { padding: 13px 14px; background: var(--term-panel, #0d0918); border-radius: 6px; }
+.term-inspector-section { margin-top: 29px; }
+.term-inspector-section h3 { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.term-inspector-section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.term-inspector-section-heading > span { color: var(--term-muted, #a59ab6); font: 10px 'JetBrains Mono', ui-monospace, monospace; }
+.term-inspector-empty { margin: 12px 0 0; padding: 16px; color: var(--term-muted, #a59ab6); background: var(--term-panel, #0d0918); border: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); border-radius: 8px; font-size: 12px; line-height: 1.7; }
+.term-inspector-table-wrap { overflow-x: auto; scrollbar-width: thin; }
+.term-inspector-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.term-inspector-table thead th { padding: 8px 0 10px; color: var(--term-muted, #a59ab6); font-size: 10px; font-weight: 400; text-align: right; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-table thead th:first-child { text-align: left; }
+.term-inspector-table tbody th { max-width: 150px; padding: 13px 12px 13px 0; text-align: left; font-weight: 500; overflow-wrap: anywhere; }
+.term-inspector-table tbody th span { display: block; }
+.term-inspector-table tbody th small { display: block; margin-top: 5px; color: var(--term-muted, #a59ab6); font-size: 9px; font-weight: 400; line-height: 1.5; }
+.term-inspector-table td { padding: 13px 0 13px 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.term-inspector-table thead th > small, .term-inspector-table td > small { display: block; margin-top: 4px; color: var(--term-muted, #a59ab6); font-size: 9px; font-weight: 400; line-height: 1.5; }
+.term-inspector-table td.term-inspector-positive > small, .term-inspector-table td.term-inspector-negative > small { color: inherit; }
+.term-inspector-table tbody tr { border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-assets { margin: 11px 0 0; }
+.term-inspector-assets > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); }
+.term-inspector-assets dt { color: var(--term-muted, #a59ab6); font-size: 12px; }
+.term-inspector-assets dd { margin: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; }
+.term-inspector-assets strong { font-weight: 500; }
+.term-inspector-assets a { display: inline-flex; gap: 6px; align-items: center; font: 10px 'JetBrains Mono', ui-monospace, monospace; }
+.term-inspector-assets dd > span { color: var(--term-muted, #a59ab6); font-size: 10px; }
+.term-inspector-footer { flex: none; padding: 18px 24px max(18px, env(safe-area-inset-bottom)); border-top: 1px solid var(--term-line, rgba(139, 92, 246, 0.28)); background: var(--term-surface, #080610); }
+.term-inspector-primary { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 45px; color: #171123; background: var(--term-accent, #c4b5fd); border: 1px solid transparent; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.term-inspector-primary:hover { background: var(--term-accent-bright, #ddd3ff); }
+.term-inspector-footer > span { display: block; margin-top: 11px; color: var(--term-muted, #a59ab6); font-size: 10px; text-align: center; }
+
+@media (max-width: 600px) {
+  .term-inspector { width: 100%; border-left: 0; }
+  .term-inspector-header { padding-top: max(24px, env(safe-area-inset-top)); }
+  .term-inspector-close { width: 42px; height: 42px; }
+  .term-inspector-address button { width: 40px; height: 40px; }
+}
+
+/* The dock is an ordinary pane: its own scroll area, without modal behavior. */
+.term-inspector.term-inspector--embedded {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.term-inspector--embedded .term-inspector-header { min-height: 28px; height: 28px; align-items: center; gap: 5px; padding: 0 6px 0 8px; background: var(--term-surface-panel, #0d0918); }
+.term-inspector--embedded .term-inspector-header > div { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
+.term-inspector--embedded .term-inspector-eyebrow { flex: none; font: inherit; font-size: 9px; letter-spacing: .06em; color: var(--term-accent); }
+.term-inspector--embedded h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; line-height: 1.4; letter-spacing: 0; }
+.term-inspector--embedded .term-inspector-close { width: 24px; height: 24px; margin: 0; border: 0; border-radius: 0; background: none; }
+.term-inspector--embedded .term-inspector-body { padding: 8px; scrollbar-color: var(--term-scrollbar, rgba(139, 92, 246, 0.35)) var(--term-surface, #080610); }
+.term-inspector--embedded .term-inspector-intro { margin: 0 0 7px; font-size: 10px; line-height: 1.45; }
+.term-inspector--embedded .term-inspector-address { gap: 4px; padding: 4px 0 4px 5px; border-radius: 0; }
+.term-inspector--embedded .term-inspector-address code { font: inherit; font-size: 10px; line-height: 1.5; }
+.term-inspector--embedded .term-inspector-address button { width: 28px; height: 28px; border-radius: 0; }
+.term-inspector--embedded .term-inspector-address button svg { width: 13px; height: 13px; }
+.term-inspector--embedded .term-inspector-copy-status { min-height: 0; margin: 0; font-size: 10px; line-height: 1.5; }
+.term-inspector--embedded .term-inspector-copy-status:not(:empty) { padding-top: 4px; }
+.term-inspector--embedded .term-inspector-links { gap: 4px 14px; margin: 4px 0 7px; }
+.term-inspector--embedded .term-inspector-link { min-height: 24px; gap: 5px; font-size: 10px; }
+.term-inspector--embedded .term-inspector-link svg { width: 11px; height: 11px; }
+.term-inspector--embedded .term-inspector-quality { margin-bottom: 7px; padding: 5px 0 0; font-size: 10px; }
+.term-inspector--embedded .term-inspector-quality dl > div { gap: 6px; padding: 3px 0; }
+.term-inspector--embedded .term-inspector-quality .term-inspector-coverage { margin-top: 5px; padding-top: 5px; }
+.term-inspector--embedded .term-inspector-metrics { gap: 0; padding: 0; border-bottom: 0; }
+.term-inspector--embedded .term-inspector-metric { padding: 7px 5px; border-bottom: 1px solid var(--term-line); }
+.term-inspector--embedded .term-inspector-metric:nth-child(even) { border-left: 1px solid var(--term-line); padding-left: 9px; }
+.term-inspector--embedded .term-inspector-metric dt { margin-bottom: 3px; font-size: 10px; line-height: 1.35; }
+.term-inspector--embedded .term-inspector-metric dd { font: inherit; font-size: 12px; line-height: 1.4; letter-spacing: 0; }
+.term-inspector--embedded .term-inspector-positive { color: #61d7ad; }
+.term-inspector--embedded .term-inspector-negative { color: #ef8294; }
+.term-inspector--embedded .term-inspector-note { margin-top: 8px; font-size: 10px; line-height: 1.55; }
+.term-inspector--embedded .term-inspector-disclosure { padding: 0; background: none; border-radius: 0; }
+.term-inspector--embedded .term-inspector-section { margin-top: 14px; }
+.term-inspector--embedded .term-inspector-section h3 { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; }
+.term-inspector--embedded .term-inspector-section-heading { min-height: 25px; margin-bottom: 0; border-bottom: 1px solid var(--term-line); }
+.term-inspector--embedded .term-inspector-section-heading > span { font: inherit; font-size: 10px; }
+.term-inspector--embedded .term-inspector-empty { margin-top: 7px; padding: 6px 0; background: none; border: 0; border-radius: 0; font-size: 10px; line-height: 1.55; }
+.term-inspector--embedded .term-inspector-table { table-layout: fixed; font-size: 10px; }
+.term-inspector--embedded .term-inspector-table thead th { width: 33%; padding: 5px 2px; font-size: 9px; white-space: normal; }
+.term-inspector--embedded .term-inspector-table thead th:first-child { width: 34%; }
+.term-inspector--embedded .term-inspector-table tbody th { padding: 7px 4px 7px 0; font-weight: 400; }
+.term-inspector--embedded .term-inspector-table tbody th small { margin-top: 3px; font-size: 8px; }
+.term-inspector--embedded .term-inspector-table td { padding: 7px 0 7px 3px; font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
+.term-inspector--embedded .term-inspector-table thead th > small, .term-inspector--embedded .term-inspector-table td > small { margin-top: 3px; font-size: 9px; }
+.term-inspector--embedded .term-inspector-assets { margin-top: 4px; }
+.term-inspector--embedded .term-inspector-assets > div { gap: 8px; padding: 7px 0; }
+.term-inspector--embedded .term-inspector-assets dt, .term-inspector--embedded .term-inspector-assets dd { font-size: 10px; }
+.term-inspector--embedded .term-inspector-assets dd { gap: 3px; min-width: 0; }
+.term-inspector--embedded .term-inspector-assets strong { max-width: 100%; overflow-wrap: anywhere; }
+.term-inspector--embedded .term-inspector-assets a { font: inherit; font-size: 10px; }
+.term-inspector--embedded .term-inspector-footer { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 8px; background: var(--term-surface-panel, #0d0918); }
+.term-inspector--embedded .term-inspector-primary { width: auto; min-height: 26px; justify-content: flex-start; gap: 5px; padding: 3px 6px; color: var(--term-accent); background: transparent; border: 1px solid var(--term-line); border-radius: 0; font-size: 10px; font-weight: 400; }
+.term-inspector--embedded .term-inspector-primary:hover { border-color: var(--term-accent); background: var(--term-hover, rgba(139, 92, 246, 0.07)); }
+.term-inspector--embedded .term-inspector-footer > span { flex: none; margin: 0; font-size: 9px; }
+
+@media (pointer: coarse) {
+  .term-inspector--embedded .term-inspector-header { min-height: 38px; height: 38px; }
+  .term-inspector--embedded .term-inspector-close { width: 34px; height: 34px; }
+  .term-inspector--embedded .term-inspector-address button { width: 36px; height: 36px; }
+  .term-inspector--embedded .term-inspector-primary { min-height: 36px; }
+  .term-inspector-quality button { min-height: 36px; min-width: 36px; }
+}

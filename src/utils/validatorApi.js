@@ -115,9 +115,11 @@ export function getValidatorBySecp(secpKey) {
  * Get validator by ID with local logo path
  */
 export function getValidatorById(validatorId) {
-  if (!validatorId) return UNKNOWN_VALIDATOR
+  if (!Number.isSafeInteger(validatorId) || validatorId <= 0) return UNKNOWN_VALIDATOR
   const validator = validatorCache.byId.get(validatorId)
-  if (!validator) return UNKNOWN_VALIDATOR
+  // An on-chain id is still verified when the bundled metadata is older
+  // than the active set. Preserve it so live maps can resolve their own data.
+  if (!validator) return { ...UNKNOWN_VALIDATOR, id: validatorId }
   
   // Add local logo path
   return {
