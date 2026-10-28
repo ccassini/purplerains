@@ -19,6 +19,8 @@ function BlockchainVizPage() {
   const [validators, setValidators] = useState([])
   const [validatorStakes, setValidatorStakes] = useState(new Map())
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [selectedValidator, setSelectedValidator] = useState(null)
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 })
   const [hoveredValidator, setHoveredValidator] = useState(null)
@@ -36,8 +38,17 @@ function BlockchainVizPage() {
   }, [])
 
   useEffect(() => {
+    if (!selectedValidator) return undefined
+    const onKeyDown = (e) => { if (e.key === 'Escape') setSelectedValidator(null) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedValidator])
+
+  useEffect(() => {
     let cancelled = false
     const load = async () => {
+      setLoading(true)
+      setLoadError(null)
       try {
         logger.log('Loading validator metadata and stake data...')
         
@@ -78,6 +89,7 @@ function BlockchainVizPage() {
         setValidators(displayValidators)
       } catch (error) {
         logger.error('Failed to load validators:', error)
+        if (!cancelled) setLoadError(error)
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -87,7 +99,7 @@ function BlockchainVizPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [reloadKey])
 
   // Calculate stake-based sizes
   const stakeStats = useMemo(() => {
@@ -264,9 +276,17 @@ function BlockchainVizPage() {
           </motion.div>
         </div>
       ) : !validators?.length ? (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem' }}>
-          <img src="/monad_logo.png" alt="Monad" style={{ width: '64px', height: '64px' }} />
-          <p style={{ color: '#a0a0a0' }}>No validators loaded. Check console for errors.</p>
+        <div className="blockchain-viz-error" role="alert">
+          <img src="/monad_logo.png" alt="" width="64" height="64" />
+          <h1>{loadError ? 'Validators could not be loaded' : 'No validators to show'}</h1>
+          <p>
+            {loadError
+              ? 'The validator list or stake data is unreachable right now. Check your connection and try again.'
+              : 'The validator list came back empty. Try again in a moment.'}
+          </p>
+          <button type="button" className="blockchain-viz-error-retry" onClick={() => setReloadKey((k) => k + 1)}>
+            Try again
+          </button>
         </div>
       ) : (
         <div className="blockchain-viz-container">
@@ -400,8 +420,10 @@ function BlockchainVizPage() {
                 }
                 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={dot.globalIndex}
+                    aria-label={`${val?.name || `Validator ${val?.id}`}, ${val?.website ? 'opens website' : 'show details'}`}
                     className={`blockchain-viz-dot ${dot.isHighlight ? 'highlight' : ''} ${isMobile ? 'blockchain-viz-dot-mobile' : ''}`}
                     style={{
                       left: `${x}%`,
@@ -412,6 +434,8 @@ function BlockchainVizPage() {
                     }}
                     onMouseEnter={handleMouseEnter}
                     onMouseLeave={handleMouseLeave}
+                    onFocus={handleMouseEnter}
+                    onBlur={handleMouseLeave}
                     onClick={handleClick}
                   >
                     {hasLogo ? (
@@ -442,7 +466,7 @@ function BlockchainVizPage() {
                       style={{ display: hasLogo ? 'none' : 'block' }}
                       aria-hidden="true"
                     />
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -450,7 +474,9 @@ function BlockchainVizPage() {
 
           {/* Center: Monad logo (rotating, no text) */}
           <div className="blockchain-viz-center">
-            <motion.div
+            <motion.button
+              type="button"
+              aria-label="Open monad.xyz in a new tab"
               className="blockchain-viz-logo-wrap"
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1, rotate: 360 }}
@@ -464,10 +490,10 @@ function BlockchainVizPage() {
             >
               <img
                 src="/monad_logo.png"
-                alt="Monad"
+                alt=""
                 className="blockchain-viz-logo"
               />
-            </motion.div>
+            </motion.button>
           </div>
         </div>
       )}
@@ -503,6 +529,8 @@ function BlockchainVizPage() {
           />
           <motion.div
             className="blockchain-viz-popup"
+            role="dialog"
+            aria-label={selectedValidator.name || `Validator ${selectedValidator.id}`}
             initial={{ opacity: 0, scale: 0.8, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8 }}
@@ -513,7 +541,9 @@ function BlockchainVizPage() {
               transform: 'translate(-50%, -50%)'
             }}
           >
-            <button 
+            <button
+              type="button"
+              aria-label="Close validator details"
               className="blockchain-viz-popup-close"
               onClick={() => setSelectedValidator(null)}
             >

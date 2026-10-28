@@ -408,3 +408,21 @@
 @keyframes mw3pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.6); } }
 @keyframes mw3tickin { from { opacity: 0.4; } to { opacity: 1; } }
 @keyframes mw3floatin { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.mw3-err-links {
+  display: flex;
+  gap: 12px;
+}
+.mw3-err-links button {
+  min-height: 44px;
+  padding: 0 18px;
+  background: none;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mw3-err-links button:hover { background: rgba(167, 139, 250, 0.15); }
+.mw3-err-links button:focus-visible,
+.mw3-retry:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 3px; }

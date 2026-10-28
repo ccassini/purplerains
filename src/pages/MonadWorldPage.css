@@ -719,3 +719,21 @@
 
   .mw-tooltip { bottom: 60px; left: 8px; right: 8px; padding: 8px 10px; }
 }
+
+.mw-err-links {
+  display: flex;
+  gap: 12px;
+}
+.mw-err-links button {
+  min-height: 44px;
+  padding: 0 18px;
+  background: none;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mw-err-links button:hover { background: rgba(167, 139, 250, 0.15); }
+.mw-err-links button:focus-visible,
+.mw-retry:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 3px; }

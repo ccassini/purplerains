@@ -772,8 +772,12 @@ export default function MonadWorldPage() {
     return (
       <div className="mw">
         <div className="mw-loading">
-          <span className="mw-err">{error}</span>
-          <button className="mw-retry" onClick={() => window.location.reload()}>Retry</button>
+          <span className="mw-err" role="alert">{error}</span>
+          <button type="button" className="mw-retry" onClick={() => window.location.reload()}>Retry</button>
+          <div className="mw-err-links">
+            <button type="button" onClick={() => navigate('/world-3d')}>3D view</button>
+            <button type="button" onClick={() => navigate('/')}>Home</button>
+          </div>
         </div>
       </div>
     )

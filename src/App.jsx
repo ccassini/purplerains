@@ -1,10 +1,11 @@
-import { useEffect, Suspense, lazy } from 'react'
+import { useEffect, useLayoutEffect, Suspense, lazy } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import Header from './components/Header'
 import ErrorBoundary from './components/ErrorBoundary'
 import { MonadProvider } from './contexts/MonadContext'
 import { legacyCalculatorTarget, legacyHomeTarget } from './pages/home/homeNavigation'
+import { titleForPath } from './utils/routeTitles'
 import './App.css'
 
 // Keep routes and the shared network ticker in separate loading boundaries.
@@ -44,6 +45,8 @@ function PageFallback() {
 
 function AppContent() {
   const location = useLocation()
+  // Layout effect: runs before page effects such as Price's ticker title capture the base title.
+  useLayoutEffect(() => { document.title = titleForPath(location.pathname) }, [location.pathname])
   const isOverlayPage = ['/price', '/terminal', '/staking', '/staking-calculator', '/validator-requirements', '/network', '/ecosystem', '/world', '/world-3d', '/agora-world', '/agora-world-3d', '/odyssey'].includes(location.pathname)
   const showNetworkFooter =
     !isOverlayPage ||
